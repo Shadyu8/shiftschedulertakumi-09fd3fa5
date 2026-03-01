@@ -72,14 +72,14 @@ function timeToMinutes(t: string): number {
 
 function getPresetTimes(preset: string, config: LocationConfig): { start: string | null; end: string | null } {
   switch (preset) {
-    case "ALL_DAY": return { start: config.earliest_shift_start, end: config.latest_shift_end };
+    case "ALL_DAY": return { start: config.earliest_shift_start, end: null };
     case "UNTIL_16": return { start: config.earliest_shift_start, end: "16:00" };
     case "UNTIL_17": return { start: config.earliest_shift_start, end: "17:00" };
-    case "FROM_13": return { start: "13:00", end: config.latest_shift_end };
-    case "FROM_14": return { start: "14:00", end: config.latest_shift_end };
-    case "FROM_15": return { start: "15:00", end: config.latest_shift_end };
-    case "FROM_16": return { start: "16:00", end: config.latest_shift_end };
-    case "FROM_17": return { start: "17:00", end: config.latest_shift_end };
+    case "FROM_13": return { start: "13:00", end: null };
+    case "FROM_14": return { start: "14:00", end: null };
+    case "FROM_15": return { start: "15:00", end: null };
+    case "FROM_16": return { start: "16:00", end: null };
+    case "FROM_17": return { start: "17:00", end: null };
     case "UNAVAILABLE": return { start: null, end: null };
     default: return { start: null, end: null };
   }
@@ -89,6 +89,8 @@ function formatBadge(entry: AvailabilityEntry): string {
   if (entry.preset === "UNAVAILABLE") return "Unavailable";
   if (entry.preset === "ALL_DAY") return "All Day";
   if (entry.preset === "CUSTOM" && entry.start_time && entry.end_time) return `${entry.start_time} – ${entry.end_time}`;
+  if (entry.start_time && !entry.end_time) return `From ${entry.start_time}`;
+  if (!entry.start_time && entry.end_time) return `Until ${entry.end_time}`;
   if (entry.start_time && entry.end_time) return `${entry.start_time} – ${entry.end_time}`;
   return "";
 }
@@ -199,7 +201,7 @@ export default function WorkerAvailability() {
       day_of_week: dow,
       available: true,
       start_time: locationConfig.earliest_shift_start,
-      end_time: locationConfig.latest_shift_end,
+      end_time: null,
       preset: "ALL_DAY",
     };
   }
