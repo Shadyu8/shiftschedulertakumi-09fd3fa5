@@ -327,7 +327,7 @@ export default function ManagerSchedule() {
       location_id: locationId,
       date: modal.date,
       start_time: newShift.startTime,
-      end_time: newShift.endTime || newShift.startTime,
+      end_time: newShift.endTime || "",
       standby: newShift.standby,
     });
     if (error) { toast.error(error.message); return; }
@@ -365,7 +365,7 @@ export default function ManagerSchedule() {
       location_id: locationId,
       date,
       start_time: cur.startTime,
-      end_time: cur.endTime || cur.startTime,
+      end_time: cur.endTime || "",
       standby: false,
     });
     if (!error) {
@@ -520,13 +520,24 @@ export default function ManagerSchedule() {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border border-border rounded px-1 py-0.5 text-xs w-full bg-card text-foreground"
+        className="border border-border rounded px-1 py-0.5 text-xs bg-card text-foreground"
+        style={{ minWidth: "58px" }}
       >
         {allowEmpty && <option value="">--</option>}
         {value && !timeSlots.includes(value) && <option value={value}>{value}</option>}
         {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
       </select>
     );
+  }
+
+  // Helper: when start time changes, clear end time if start >= end
+  function handleStartTimeChange(
+    currentEndTime: string,
+    newStartTime: string
+  ): string {
+    if (!currentEndTime) return "";
+    if (newStartTime >= currentEndTime) return "";
+    return currentEndTime;
   }
 
   // ── Render ──
@@ -703,7 +714,7 @@ export default function ManagerSchedule() {
                             <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
                             {s.standby && <p className="text-xs text-muted-foreground mb-1">Standby</p>}
                             <div className="flex items-center gap-1">
-                              <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                              <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                               <span className="text-muted-foreground text-sm shrink-0">–</span>
                               <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                             </div>
@@ -714,7 +725,7 @@ export default function ManagerSchedule() {
                         <div className="relative px-3 pt-6 pb-2 rounded-lg bg-warning/10 border border-warning/20">
                           <button onClick={() => setDismissedAvail((prev) => new Set(prev).add(availKey))} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Dismiss">×</button>
                           <div className="flex items-center gap-1">
-                            <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: pendingEdit.endTime }); }} />
+                            <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
                             <span className="text-muted-foreground text-sm shrink-0">–</span>
                             <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
                           </div>
@@ -745,7 +756,7 @@ export default function ManagerSchedule() {
                         <div className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                           <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
                           <div className="flex items-center gap-1">
-                            <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                            <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                             <span className="text-muted-foreground text-sm shrink-0">–</span>
                             <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                           </div>
@@ -816,7 +827,7 @@ export default function ManagerSchedule() {
                             <div className={`px-2 py-1.5 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                               {s.standby && <p className="text-muted-foreground text-xs mb-1">Standby</p>}
                               <div className="flex items-center gap-1">
-                                <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                                <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                                 <span className="text-muted-foreground text-xs shrink-0">–</span>
                                 <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                               </div>
@@ -837,7 +848,7 @@ export default function ManagerSchedule() {
                         </div>
                         <div className="px-2 py-1.5 rounded-lg bg-warning/10 border border-dashed border-warning/30">
                           <div className="flex items-center gap-1">
-                            <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: pendingEdit.endTime }); }} />
+                                <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, dateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: newEnd }); }} />
                             <span className="text-muted-foreground text-xs shrink-0">–</span>
                             <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, dateStr, avail, "endTime", v); savePendingShift(ua.userId, dateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
                           </div>
@@ -854,7 +865,7 @@ export default function ManagerSchedule() {
                         <div className="font-semibold text-foreground text-sm mb-1.5 pr-6">{s.profile?.full_name ?? "Unknown"}</div>
                         <div className={`px-2 py-1.5 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                           <div className="flex items-center gap-1">
-                            <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                            <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                             <span className="text-muted-foreground text-xs shrink-0">–</span>
                             <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                           </div>
@@ -893,7 +904,7 @@ export default function ManagerSchedule() {
                     const dateStr = toLocalDateStr(day);
                     const isToday = dateStr === todayStr;
                     return (
-                      <th key={dateStr} className={`text-center px-2 py-2 font-semibold text-foreground border-r border-border min-w-[120px] ${isToday ? "bg-primary/5" : ""}`}>
+                      <th key={dateStr} className={`text-center px-2 py-2 font-semibold text-foreground border-r border-border min-w-[140px] ${isToday ? "bg-primary/5" : ""}`}>
                         <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                           {day.toLocaleDateString("en-GB", { weekday: "short" })}
                         </div>
@@ -949,7 +960,7 @@ export default function ManagerSchedule() {
                                   <button onClick={() => deleteShift(s.id)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Remove">×</button>
                                   {s.standby && <span className="text-xs text-muted-foreground block mb-0.5">Standby</span>}
                                   <div className="flex gap-0.5 items-center">
-                                    <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                                    <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                                     <span className="text-muted-foreground text-xs shrink-0">–</span>
                                     <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                                   </div>
@@ -960,7 +971,7 @@ export default function ManagerSchedule() {
                               <div className="relative rounded px-1 pt-3 pb-1 bg-warning/10 border border-dashed border-warning/30">
                                 <button onClick={() => setDismissedAvail((prev) => new Set(prev).add(availKey))} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Dismiss">×</button>
                                 <div className="flex gap-0.5 items-center">
-                                  <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: pendingEdit.endTime }); }} />
+                                  <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, dateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: newEnd }); }} />
                                   <span className="text-muted-foreground text-xs shrink-0">–</span>
                                   <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, dateStr, avail, "endTime", v); savePendingShift(ua.userId, dateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
                                 </div>
@@ -1009,7 +1020,7 @@ export default function ManagerSchedule() {
                                     <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                                       <button onClick={() => deleteShift(s.id)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border transition-colors" title="Remove">×</button>
                                       <div className="flex gap-0.5 items-center">
-                                        <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                                        <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
                                         <span className="text-muted-foreground text-xs shrink-0">–</span>
                                         <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                                       </div>
