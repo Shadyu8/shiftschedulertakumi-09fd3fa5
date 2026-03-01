@@ -230,10 +230,18 @@ export default function KioskPage() {
     }, 2500);
   }
 
+  // Round time to nearest quarter-hour (7-min boundary)
+  function roundToQuarter(date: Date): string {
+    const mins = date.getHours() * 60 + date.getMinutes();
+    const remainder = mins % 15;
+    const rounded = remainder < 7 ? mins - remainder : mins + (15 - remainder);
+    return `${String(Math.floor(rounded / 60)).padStart(2, "0")}:${String(rounded % 60).padStart(2, "0")}`;
+  }
+
   async function handleClockOut() {
     if (!workerInfo?.activePunch) return;
     setActionLoading(true);
-    const now = new Date().toTimeString().slice(0, 5);
+    const now = roundToQuarter(new Date());
     const { error } = await supabase.from("time_punches").update({
       punch_out: now,
       recorded_out_by_id: user?.id,
