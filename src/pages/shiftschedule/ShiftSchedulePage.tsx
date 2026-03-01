@@ -85,7 +85,7 @@ export default function ShiftSchedulePage() {
       setLocationsLoading(true);
       let locs: Location[] = [];
 
-      if (role === "manager" || role === "admin") {
+      if (role === "admin") {
         const { data } = await supabase
           .from("locations")
           .select("id, name")
