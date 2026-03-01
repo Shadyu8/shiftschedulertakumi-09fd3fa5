@@ -43,8 +43,10 @@ interface AvailabilityEntry {
 interface LocationConfig {
   earliest_shift_start: string;
   latest_shift_end: string;
-  availability_earliest_time: string;
-  availability_latest_time: string;
+  availability_from_start: string;
+  availability_from_end: string;
+  availability_to_start: string;
+  availability_to_end: string;
 }
 
 function getMonWeekStart(date: Date): Date {
@@ -106,8 +108,10 @@ export default function WorkerAvailability() {
   const [locationConfig, setLocationConfig] = useState<LocationConfig>({
     earliest_shift_start: "11:30",
     latest_shift_end: "23:00",
-    availability_earliest_time: "12:00",
-    availability_latest_time: "19:00",
+    availability_from_start: "12:00",
+    availability_from_end: "18:00",
+    availability_to_start: "15:00",
+    availability_to_end: "22:00",
   });
 
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
@@ -115,9 +119,13 @@ export default function WorkerAvailability() {
   const isLocked = profile?.availability_locked;
   const isPastWeek = isBefore(weekEndDate, startOfDay(new Date())) && !isToday(weekEndDate);
 
-  const customTimeSlots = useMemo(
-    () => generate30MinSlots(locationConfig.availability_earliest_time, locationConfig.availability_latest_time),
-    [locationConfig.availability_earliest_time, locationConfig.availability_latest_time]
+  const customFromSlots = useMemo(
+    () => generate30MinSlots(locationConfig.availability_from_start, locationConfig.availability_from_end),
+    [locationConfig.availability_from_start, locationConfig.availability_from_end]
+  );
+  const customToSlots = useMemo(
+    () => generate30MinSlots(locationConfig.availability_to_start, locationConfig.availability_to_end),
+    [locationConfig.availability_to_start, locationConfig.availability_to_end]
   );
 
   // Fetch location config
@@ -139,8 +147,10 @@ export default function WorkerAvailability() {
             setLocationConfig({
               earliest_shift_start: settings.earliest_shift_start,
               latest_shift_end: settings.latest_shift_end,
-              availability_earliest_time: (settings as any).availability_earliest_time || "12:00",
-              availability_latest_time: (settings as any).availability_latest_time || "19:00",
+              availability_from_start: (settings as any).availability_from_start || "12:00",
+              availability_from_end: (settings as any).availability_from_end || "18:00",
+              availability_to_start: (settings as any).availability_to_start || "15:00",
+              availability_to_end: (settings as any).availability_to_end || "22:00",
             });
           }
         }
@@ -212,10 +222,9 @@ export default function WorkerAvailability() {
       prev.map((e, i) => {
         if (i !== index) return e;
         if (presetValue === "CUSTOM") {
-          // When switching to custom, default to first and 7th slot (3hrs apart) if not already custom
-          const defaultStart = customTimeSlots[0] || locationConfig.availability_earliest_time;
-          const defaultEndIdx = Math.min(6, customTimeSlots.length - 1);
-          const defaultEnd = customTimeSlots[defaultEndIdx] || locationConfig.availability_latest_time;
+          const defaultStart = customFromSlots[0] || locationConfig.availability_from_start;
+          const defaultEndIdx = Math.min(customToSlots.length - 1, 6);
+          const defaultEnd = customToSlots[defaultEndIdx] || locationConfig.availability_to_end;
           return {
             ...e,
             preset: "CUSTOM",
@@ -458,7 +467,7 @@ export default function WorkerAvailability() {
                             <SelectValue placeholder="Start" />
                           </SelectTrigger>
                           <SelectContent>
-                            {customTimeSlots.map((slot) => (
+                            {customFromSlots.map((slot) => (
                               <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                             ))}
                           </SelectContent>
@@ -476,7 +485,7 @@ export default function WorkerAvailability() {
                             <SelectValue placeholder="End" />
                           </SelectTrigger>
                           <SelectContent>
-                            {customTimeSlots.map((slot) => (
+                            {customToSlots.map((slot) => (
                               <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                             ))}
                           </SelectContent>
