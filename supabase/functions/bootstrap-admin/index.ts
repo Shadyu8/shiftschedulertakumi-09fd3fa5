@@ -6,6 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -34,10 +36,26 @@ serve(async (req) => {
 
     if (!email || !password) {
       return new Response(
-        JSON.stringify({ error: "email and password are required" }),
+        JSON.stringify({ error: "Email and password are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    if (typeof email !== "string" || !EMAIL_REGEX.test(email) || email.length > 255) {
+      return new Response(
+        JSON.stringify({ error: "Invalid email format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+      return new Response(
+        JSON.stringify({ error: "Password must be 8-128 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const safeName = typeof full_name === "string" ? full_name.trim().substring(0, 100) : "Admin";
 
     // Create admin user
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
@@ -46,20 +64,27 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         username: email,
-        full_name: full_name || "Admin",
+        full_name: safeName,
         role: "admin",
       },
     });
 
-    if (createError) throw createError;
+    if (createError) {
+      console.error("Bootstrap admin error:", createError);
+      return new Response(
+        JSON.stringify({ error: "Failed to create admin user" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ success: true, user_id: newUser.user?.id, message: "Admin user created. You can now log in." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
+    console.error("Bootstrap error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "An unexpected error occurred" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const VALID_ROLES = ["admin", "manager", "shiftleader", "worker"];
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -52,18 +56,65 @@ serve(async (req) => {
 
     // Delete user action
     if (body.action === "delete") {
+      if (!body.user_id || !UUID_REGEX.test(body.user_id)) {
+        return new Response(JSON.stringify({ error: "Invalid user ID" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { error } = await supabase.auth.admin.deleteUser(body.user_id);
-      if (error) throw error;
+      if (error) {
+        console.error("Delete user error:", error);
+        return new Response(JSON.stringify({ error: "Failed to delete user" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Create user
+    // Create user - validate inputs
     const { email, full_name, password, role, organization_id } = body;
 
     if (!email || !full_name || !password || !role) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof email !== "string" || !EMAIL_REGEX.test(email) || email.length > 255) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof full_name !== "string" || full_name.trim().length === 0 || full_name.length > 100) {
+      return new Response(JSON.stringify({ error: "Name must be 1-100 characters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+      return new Response(JSON.stringify({ error: "Password must be 8-128 characters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!VALID_ROLES.includes(role)) {
+      return new Response(JSON.stringify({ error: "Invalid role" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (organization_id && !UUID_REGEX.test(organization_id)) {
+      return new Response(JSON.stringify({ error: "Invalid organization ID" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -84,12 +135,21 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         username: email,
-        full_name,
+        full_name: full_name.trim(),
         role,
       },
     });
 
-    if (createError) throw createError;
+    if (createError) {
+      console.error("Create user error:", createError);
+      const userMessage = createError.message?.includes("already been registered")
+        ? "A user with this email already exists"
+        : "Failed to create user";
+      return new Response(JSON.stringify({ error: userMessage }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Update profile with organization
     if (organization_id && newUser.user) {
@@ -103,7 +163,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("Unexpected error:", error);
+    return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
