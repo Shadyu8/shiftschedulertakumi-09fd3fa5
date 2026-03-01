@@ -22,6 +22,7 @@ export default function LoginPage() {
         manager: "/manager",
         shiftleader: "/shiftleader",
         worker: "/worker",
+        kiosk: "/kiosk",
       };
       navigate(routes[role] || "/", { replace: true });
     }

@@ -125,6 +125,38 @@ export type Database = {
         }
         Relationships: []
       }
+      kiosk_accounts: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          location_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          location_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          location_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kiosk_accounts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_settings: {
         Row: {
           availability_deadline_day: number
@@ -454,7 +486,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "manager" | "shiftleader" | "worker"
+      app_role: "admin" | "manager" | "shiftleader" | "worker" | "kiosk"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -582,7 +614,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "shiftleader", "worker"],
+      app_role: ["admin", "manager", "shiftleader", "worker", "kiosk"],
     },
   },
 } as const

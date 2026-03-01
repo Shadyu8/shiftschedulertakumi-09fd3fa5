@@ -59,9 +59,28 @@ export default function KioskPage() {
   const MAX_ATTEMPTS = 5;
   const LOCKOUT_MS = 60_000; // 1 minute lockout
 
-  // Fetch locations for manager
+  // Kiosk-role users: auto-detect location from kiosk_accounts
+  useEffect(() => {
+    if (!user || role !== "kiosk") return;
+    supabase
+      .from("kiosk_accounts")
+      .select("location_id, locations(id, name)")
+      .eq("user_id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          const loc = data.locations as any;
+          setSelectedLoc(data.location_id);
+          setSelectedLocName(loc?.name || "Kiosk");
+          setKioskState("active");
+        }
+      });
+  }, [user, role]);
+
+  // Fetch locations for manager/shiftleader setup
   useEffect(() => {
     if (!user || !profile) return;
+    if (role === "kiosk") return; // handled above
     if (role === "manager" || role === "admin") {
       supabase
         .from("locations")
@@ -356,10 +375,12 @@ export default function KioskPage() {
           <Clock className="w-5 h-5 text-primary" />
           <span className="font-semibold text-foreground">{selectedLocName}</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
-          <LogOut className="w-4 h-4 mr-1" />
-          Exit Kiosk
-        </Button>
+        {role !== "kiosk" && (
+          <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
+            <LogOut className="w-4 h-4 mr-1" />
+            Exit Kiosk
+          </Button>
+        )}
       </div>
 
       {/* Main content */}
@@ -450,7 +471,9 @@ export default function KioskPage() {
                       : "border-border bg-card text-muted-foreground"
                   }`}
                 >
-                  {pin[i] || ""}
+                  {i < pin.length
+                      ? "★"
+                      : ""}
                 </div>
               ))}
             </div>
