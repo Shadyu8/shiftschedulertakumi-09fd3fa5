@@ -32,7 +32,7 @@ interface WorkerInfo {
 type KioskState = "setup" | "active";
 
 export default function KioskPage() {
-  const { user, profile, role } = useAuth();
+  const { user, profile, role, signOut } = useAuth();
   const [kioskState, setKioskState] = useState<KioskState>("setup");
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLoc, setSelectedLoc] = useState("");
@@ -307,7 +307,6 @@ export default function KioskPage() {
   async function handleExitKiosk() {
     setExitLoading(true);
     setExitError("");
-    // Verify manager password by re-authenticating
     const email = user?.email;
     if (!email) {
       setExitError("Unable to verify identity");
@@ -321,6 +320,11 @@ export default function KioskPage() {
     if (error) {
       setExitError("Incorrect password");
       setExitLoading(false);
+      return;
+    }
+    if (role === "kiosk") {
+      // Kiosk accounts: fully sign out
+      await signOut();
       return;
     }
     localStorage.removeItem("kiosk_mode");
@@ -375,12 +379,10 @@ export default function KioskPage() {
           <Clock className="w-5 h-5 text-primary" />
           <span className="font-semibold text-foreground">{selectedLocName}</span>
         </div>
-        {role !== "kiosk" && (
-          <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
-            <LogOut className="w-4 h-4 mr-1" />
-            Exit Kiosk
-          </Button>
-        )}
+        <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
+          <LogOut className="w-4 h-4 mr-1" />
+          {role === "kiosk" ? "Log Out" : "Exit Kiosk"}
+        </Button>
       </div>
 
       {/* Main content */}
@@ -528,8 +530,8 @@ export default function KioskPage() {
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Exit Kiosk Mode</DialogTitle>
-            <DialogDescription>Enter your password to exit kiosk mode.</DialogDescription>
+            <DialogTitle>{role === "kiosk" ? "Log Out" : "Exit Kiosk Mode"}</DialogTitle>
+            <DialogDescription>Enter the kiosk password to continue.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {exitError && (
