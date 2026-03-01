@@ -27,7 +27,7 @@ interface Location {
 type ViewMode = "day" | "week";
 
 export default function ShiftSchedulePage() {
-  const { user } = useAuth();
+  const { user, role, profile } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLoc, setSelectedLoc] = useState(() => {
@@ -66,29 +66,43 @@ export default function ShiftSchedulePage() {
     touchEndX.current = null;
   }, [viewMode]);
 
-  // Fetch user locations
+  // Fetch locations — managers/admins see all org locations, others see user_locations
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("user_locations")
-      .select("location_id, locations(id, name)")
-      .eq("user_id", user.id)
-      .then(({ data }) => {
-        if (data) {
-          const locs = data.map((d: any) => d.locations).filter(Boolean);
-          setLocations(locs);
-          // Auto-select: saved preference > only location > first
-          const saved = localStorage.getItem("shiftschedule_selected_location");
-          if (saved && locs.some((l: Location) => l.id === saved)) {
-            setSelectedLoc(saved);
-          } else if (locs.length === 1) {
-            setSelectedLoc(locs[0].id);
-          } else if (locs.length > 0 && !selectedLoc) {
-            setSelectedLoc(locs[0].id);
-          }
-        }
-      });
-  }, [user]);
+
+    async function fetchLocations() {
+      let locs: Location[] = [];
+
+      if (role === "manager" || role === "admin") {
+        // Fetch all locations in the user's organization
+        const { data } = await supabase
+          .from("locations")
+          .select("id, name")
+          .order("name");
+        locs = (data || []) as Location[];
+      } else {
+        // Fetch locations assigned to the user
+        const { data } = await supabase
+          .from("user_locations")
+          .select("location_id, locations(id, name)")
+          .eq("user_id", user.id);
+        locs = (data || []).map((d: any) => d.locations).filter(Boolean);
+      }
+
+      setLocations(locs);
+      // Auto-select: saved preference > only location > first
+      const saved = localStorage.getItem("shiftschedule_selected_location");
+      if (saved && locs.some((l) => l.id === saved)) {
+        setSelectedLoc(saved);
+      } else if (locs.length === 1) {
+        setSelectedLoc(locs[0].id);
+      } else if (locs.length > 0 && !selectedLoc) {
+        setSelectedLoc(locs[0].id);
+      }
+    }
+
+    fetchLocations();
+  }, [user, role]);
 
   // Fetch shifts for the week containing selectedDate
   useEffect(() => {
@@ -250,12 +264,12 @@ export default function ShiftSchedulePage() {
       <div className="flex flex-col gap-4 mb-6">
         <h1 className="page-header">📆 Shift Schedule</h1>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Select value={selectedLoc} onValueChange={(v) => {
             setSelectedLoc(v);
             localStorage.setItem("shiftschedule_selected_location", v);
           }}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select location" />
             </SelectTrigger>
             <SelectContent>
@@ -277,7 +291,7 @@ export default function ShiftSchedulePage() {
             <Button variant="outline" size="icon" onClick={nextDay}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={goToday} className="ml-1 text-xs">
+            <Button variant="ghost" size="sm" onClick={goToday} className="text-xs">
               Today
             </Button>
           </div>
@@ -286,7 +300,6 @@ export default function ShiftSchedulePage() {
             type="single"
             value={viewMode}
             onValueChange={(v) => v && setViewMode(v as ViewMode)}
-            className="ml-auto"
           >
             <ToggleGroupItem value="day" aria-label="Day view" className="gap-1.5 text-xs">
               <Calendar className="h-3.5 w-3.5" /> Day
