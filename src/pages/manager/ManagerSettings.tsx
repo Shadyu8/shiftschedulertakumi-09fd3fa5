@@ -32,6 +32,20 @@ interface KioskAccount {
   created_at: string;
 }
 
+function generate30MinOptions(earliest: string, latest: string): string[] {
+  const [eh, em] = earliest.split(":").map(Number);
+  const [lh, lm] = latest.split(":").map(Number);
+  const startMins = eh * 60 + em;
+  const endMins = lh * 60 + lm;
+  const slots: string[] = [];
+  for (let t = startMins; t <= endMins; t += 30) {
+    const h = Math.floor(t / 60);
+    const m = t % 60;
+    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+  return slots;
+}
+
 export default function ManagerSettings() {
   const { user, profile } = useAuth();
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
@@ -167,8 +181,10 @@ export default function ManagerSettings() {
     // Include the availability time range fields
     const saveData = {
       ...data,
-      availability_earliest_time: (settings as any).availability_earliest_time || "12:00",
-      availability_latest_time: (settings as any).availability_latest_time || "19:00",
+      availability_from_start: (settings as any).availability_from_start || "12:00",
+      availability_from_end: (settings as any).availability_from_end || "18:00",
+      availability_to_start: (settings as any).availability_to_start || "15:00",
+      availability_to_end: (settings as any).availability_to_end || "22:00",
     };
     if (id) {
       const { error } = await supabase.from("location_settings").update(saveData as any).eq("id", id);
@@ -220,19 +236,17 @@ export default function ManagerSettings() {
             </div>
             <div>
               <Label>Earliest Shift Start</Label>
-              <Input
-                type="time"
-                value={settings.earliest_shift_start}
-                onChange={(e) => setSettings({ ...settings, earliest_shift_start: e.target.value })}
-              />
+              <Select value={settings.earliest_shift_start} onValueChange={(v) => setSettings({ ...settings, earliest_shift_start: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Latest Shift End</Label>
-              <Input
-                type="time"
-                value={settings.latest_shift_end}
-                onChange={(e) => setSettings({ ...settings, latest_shift_end: e.target.value })}
-              />
+              <Select value={settings.latest_shift_end} onValueChange={(v) => setSettings({ ...settings, latest_shift_end: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -248,26 +262,42 @@ export default function ManagerSettings() {
         <div className="stat-card space-y-4">
           <h2 className="font-semibold text-foreground">Worker Availability Settings</h2>
           <p className="text-xs text-muted-foreground">
-            Configure the time range workers can choose from when setting custom availability (30-min intervals).
+            Configure the time ranges workers can choose from when setting custom availability "From" and "To" (30-min intervals).
           </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Custom Earliest Time</Label>
-              <Input
-                type="time"
-                value={(settings as any).availability_earliest_time || "12:00"}
-                onChange={(e) => setSettings({ ...settings, availability_earliest_time: e.target.value } as any)}
-                step="1800"
-              />
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-foreground">Custom "From" range</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Earliest</Label>
+                <Select value={(settings as any).availability_from_start || "12:00"} onValueChange={(v) => setSettings({ ...settings, availability_from_start: v } as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Latest</Label>
+                <Select value={(settings as any).availability_from_end || "18:00"} onValueChange={(v) => setSettings({ ...settings, availability_from_end: v } as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Custom Latest Time</Label>
-              <Input
-                type="time"
-                value={(settings as any).availability_latest_time || "19:00"}
-                onChange={(e) => setSettings({ ...settings, availability_latest_time: e.target.value } as any)}
-                step="1800"
-              />
+            <p className="text-xs font-medium text-foreground">Custom "To" range</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Earliest</Label>
+                <Select value={(settings as any).availability_to_start || "15:00"} onValueChange={(v) => setSettings({ ...settings, availability_to_start: v } as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Latest</Label>
+                <Select value={(settings as any).availability_to_end || "22:00"} onValueChange={(v) => setSettings({ ...settings, availability_to_end: v } as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{generate30MinOptions("06:00", "23:30").map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>

@@ -162,7 +162,11 @@ export type Database = {
           availability_deadline_day: number
           availability_deadline_time: string
           availability_earliest_time: string
+          availability_from_end: string
+          availability_from_start: string
           availability_latest_time: string
+          availability_to_end: string
+          availability_to_start: string
           breaks_enabled: boolean
           created_at: string
           earliest_shift_start: string
@@ -177,7 +181,11 @@ export type Database = {
           availability_deadline_day?: number
           availability_deadline_time?: string
           availability_earliest_time?: string
+          availability_from_end?: string
+          availability_from_start?: string
           availability_latest_time?: string
+          availability_to_end?: string
+          availability_to_start?: string
           breaks_enabled?: boolean
           created_at?: string
           earliest_shift_start?: string
@@ -192,7 +200,11 @@ export type Database = {
           availability_deadline_day?: number
           availability_deadline_time?: string
           availability_earliest_time?: string
+          availability_from_end?: string
+          availability_from_start?: string
           availability_latest_time?: string
+          availability_to_end?: string
+          availability_to_start?: string
           breaks_enabled?: boolean
           created_at?: string
           earliest_shift_start?: string
