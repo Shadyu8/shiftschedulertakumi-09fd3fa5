@@ -5,9 +5,12 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Check, X } from "lucide-react";
+import { Check, X, Pencil } from "lucide-react";
 
 interface PunchWithProfile {
   id: string;
@@ -28,12 +31,15 @@ export default function ManagerPunchApprovals() {
   const [punches, setPunches] = useState<PunchWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("pending");
+  const [editPunch, setEditPunch] = useState<PunchWithProfile | null>(null);
+  const [editIn, setEditIn] = useState("");
+  const [editOut, setEditOut] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function fetchPunches() {
     if (!profile?.organization_id) return;
     setLoading(true);
 
-    // Get all locations in org
     const { data: locs } = await supabase
       .from("locations")
       .select("id, name")
@@ -48,7 +54,6 @@ export default function ManagerPunchApprovals() {
     const locMap = new Map(locs.map((l) => [l.id, l.name]));
     const locIds = locs.map((l) => l.id);
 
-    // Fetch punches for these locations
     const { data: punchData } = await supabase
       .from("time_punches")
       .select("*")
@@ -63,7 +68,6 @@ export default function ManagerPunchApprovals() {
       return;
     }
 
-    // Fetch worker profiles
     const userIds = [...new Set(punchData.map((p) => p.user_id))];
     const { data: profiles } = await supabase
       .from("profiles")
@@ -117,6 +121,65 @@ export default function ManagerPunchApprovals() {
     setPunches((prev) =>
       prev.map((p) => (p.id === punchId ? { ...p, approved: false } : p))
     );
+  }
+
+  function openEdit(p: PunchWithProfile) {
+    setEditPunch(p);
+    setEditIn(p.punch_in);
+    setEditOut(p.punch_out || "");
+  }
+
+  async function handleSaveEdit() {
+    if (!editPunch || !editIn) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("time_punches")
+      .update({
+        punch_in: editIn,
+        punch_out: editOut || null,
+      })
+      .eq("id", editPunch.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Punch times updated");
+    setPunches((prev) =>
+      prev.map((p) =>
+        p.id === editPunch.id ? { ...p, punch_in: editIn, punch_out: editOut || null } : p
+      )
+    );
+    setEditPunch(null);
+  }
+
+  async function handleEditAndApprove() {
+    if (!editPunch || !editIn) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("time_punches")
+      .update({
+        punch_in: editIn,
+        punch_out: editOut || null,
+        approved: true,
+        approved_by: user?.id,
+        approved_at: new Date().toISOString(),
+      })
+      .eq("id", editPunch.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Punch updated & approved");
+    setPunches((prev) =>
+      prev.map((p) =>
+        p.id === editPunch.id
+          ? { ...p, punch_in: editIn, punch_out: editOut || null, approved: true }
+          : p
+      )
+    );
+    setEditPunch(null);
   }
 
   async function handleBulkApprove() {
@@ -179,7 +242,6 @@ export default function ManagerPunchApprovals() {
             <div className="space-y-2">
               {filtered.map((p) => (
                 <div key={p.id} className="stat-card flex items-center gap-4">
-                  {/* Worker avatar */}
                   {p.worker_picture ? (
                     <img src={p.worker_picture} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
                   ) : (
@@ -188,7 +250,6 @@ export default function ManagerPunchApprovals() {
                     </div>
                   )}
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{p.worker_name}</p>
                     <p className="text-sm text-muted-foreground">
@@ -196,7 +257,6 @@ export default function ManagerPunchApprovals() {
                     </p>
                   </div>
 
-                  {/* Time */}
                   <div className="text-right shrink-0">
                     <p className="font-mono text-sm text-foreground">
                       {p.punch_in} → {p.punch_out || <span className="text-primary font-medium">Active</span>}
@@ -206,23 +266,88 @@ export default function ManagerPunchApprovals() {
                   {/* Actions */}
                   {tab === "pending" && (
                     <div className="flex gap-1.5 shrink-0">
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-primary hover:bg-primary/10" onClick={() => handleApprove(p.id)}>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-primary hover:bg-primary/10" onClick={() => handleApprove(p.id)} title="Approve">
                         <Check className="w-4 h-4" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleReject(p.id)}>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:bg-muted" onClick={() => openEdit(p)} title="Edit">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => handleReject(p.id)} title="Reject">
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
                   )}
 
-                  {tab === "approved" && <Badge className="bg-primary/10 text-primary border-0">Approved</Badge>}
-                  {tab === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                  {(tab === "approved" || tab === "rejected") && (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:bg-muted" onClick={() => openEdit(p)} title="Edit">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      {tab === "approved" && <Badge className="bg-primary/10 text-primary border-0">Approved</Badge>}
+                      {tab === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+                    </div>
+                  )}
+
+                  {tab === "active" && (
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:bg-muted" onClick={() => openEdit(p)} title="Edit">
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Edit Punch Dialog */}
+      <Dialog open={!!editPunch} onOpenChange={(o) => !o && setEditPunch(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Punch</DialogTitle>
+          </DialogHeader>
+          {editPunch && (
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-3">
+                {editPunch.worker_picture ? (
+                  <img src={editPunch.worker_picture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                    {editPunch.worker_name?.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-foreground">{editPunch.worker_name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {format(new Date(editPunch.date), "EEE, dd MMM yyyy")} · {editPunch.location_name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="edit-in" className="text-xs text-muted-foreground">Clock In</Label>
+                  <Input id="edit-in" type="time" value={editIn} onChange={(e) => setEditIn(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-out" className="text-xs text-muted-foreground">Clock Out</Label>
+                  <Input id="edit-out" type="time" value={editOut} onChange={(e) => setEditOut(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={handleSaveEdit} disabled={saving}>
+                  Save Only
+                </Button>
+                <Button className="flex-1" onClick={handleEditAndApprove} disabled={saving}>
+                  <Check className="w-4 h-4 mr-1" />
+                  Save & Approve
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
