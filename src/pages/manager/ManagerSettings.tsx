@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { Monitor, Trash2, Plus, Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Settings {
   id?: string;
@@ -20,11 +23,29 @@ interface Settings {
   latest_shift_end: string;
 }
 
+interface KioskAccount {
+  id: string;
+  user_id: string;
+  location_id: string;
+  location_name: string;
+  email: string;
+  created_at: string;
+}
+
 export default function ManagerSettings() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
   const [selectedLoc, setSelectedLoc] = useState("");
   const [settings, setSettings] = useState<Settings | null>(null);
+
+  // Kiosk accounts state
+  const [kioskAccounts, setKioskAccounts] = useState<KioskAccount[]>([]);
+  const [showCreateKiosk, setShowCreateKiosk] = useState(false);
+  const [kioskLocId, setKioskLocId] = useState("");
+  const [kioskEmail, setKioskEmail] = useState("");
+  const [kioskPassword, setKioskPassword] = useState("");
+  const [showKioskPassword, setShowKioskPassword] = useState(false);
+  const [kioskCreating, setKioskCreating] = useState(false);
 
   useEffect(() => {
     if (!profile?.organization_id) return;
@@ -61,6 +82,84 @@ export default function ManagerSettings() {
         });
       });
   }, [selectedLoc]);
+
+  // Fetch kiosk accounts
+  useEffect(() => {
+    if (!profile?.organization_id) return;
+    fetchKioskAccounts();
+  }, [profile]);
+
+  async function fetchKioskAccounts() {
+    const { data: accounts } = await supabase
+      .from("kiosk_accounts" as any)
+      .select("id, user_id, location_id, created_at, locations(name)");
+    if (!accounts) return;
+
+    const userIds = (accounts as any[]).map((a) => a.user_id);
+    if (userIds.length === 0) { setKioskAccounts([]); return; }
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, username")
+      .in("user_id", userIds);
+    const emailMap = new Map((profiles || []).map((p: any) => [p.user_id, p.username]));
+
+    setKioskAccounts(
+      (accounts as any[]).map((a) => ({
+        id: a.id,
+        user_id: a.user_id,
+        location_id: a.location_id,
+        location_name: a.locations?.name || "Unknown",
+        email: emailMap.get(a.user_id) || "—",
+        created_at: a.created_at,
+      }))
+    );
+  }
+
+  async function handleCreateKiosk() {
+    if (!kioskEmail || !kioskPassword || !kioskLocId) {
+      toast.error("Fill in all fields");
+      return;
+    }
+    if (kioskPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    setKioskCreating(true);
+    const res = await supabase.functions.invoke("admin-create-user", {
+      body: {
+        email: kioskEmail,
+        full_name: `Kiosk – ${locations.find((l) => l.id === kioskLocId)?.name || ""}`,
+        password: kioskPassword,
+        role: "kiosk",
+        organization_id: profile?.organization_id,
+        location_id: kioskLocId,
+      },
+    });
+    setKioskCreating(false);
+    if (res.error || res.data?.error) {
+      toast.error(res.data?.error || res.error?.message || "Failed to create kiosk account");
+      return;
+    }
+    toast.success("Kiosk account created");
+    setShowCreateKiosk(false);
+    setKioskEmail("");
+    setKioskPassword("");
+    setKioskLocId("");
+    fetchKioskAccounts();
+  }
+
+  async function handleDeleteKiosk(account: KioskAccount) {
+    if (!confirm(`Delete kiosk account for ${account.location_name}?`)) return;
+    const res = await supabase.functions.invoke("admin-create-user", {
+      body: { action: "delete", user_id: account.user_id },
+    });
+    if (res.error || res.data?.error) {
+      toast.error(res.data?.error || "Failed to delete");
+      return;
+    }
+    toast.success("Kiosk account deleted");
+    fetchKioskAccounts();
+  }
 
   async function handleSave() {
     if (!settings) return;
@@ -174,7 +273,102 @@ export default function ManagerSettings() {
         </div>
 
         <Button onClick={handleSave}>Save Settings</Button>
+
+        {/* Kiosk Accounts Section */}
+        <div className="stat-card space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <Monitor className="w-5 h-5" />
+              Kiosk Accounts
+            </h2>
+            <Button size="sm" onClick={() => setShowCreateKiosk(true)}>
+              <Plus className="w-4 h-4 mr-1" /> Create Kiosk
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Each location can have a dedicated kiosk login for the iPad. Workers use their PIN to clock in/out.
+          </p>
+
+          {kioskAccounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No kiosk accounts yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {kioskAccounts.map((ka) => (
+                <div key={ka.id} className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="font-medium text-foreground text-sm">{ka.location_name}</p>
+                    <p className="text-xs text-muted-foreground">{ka.email}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => handleDeleteKiosk(ka)}>
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Create Kiosk Dialog */}
+      <Dialog open={showCreateKiosk} onOpenChange={setShowCreateKiosk}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Kiosk Account</DialogTitle>
+            <DialogDescription>
+              Create a dedicated login for an iPad kiosk at a specific location.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Location</Label>
+              <Select value={kioskLocId} onValueChange={setKioskLocId}>
+                <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                <SelectContent>
+                  {locations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Email (kiosk login)</Label>
+              <Input
+                type="email"
+                value={kioskEmail}
+                onChange={(e) => setKioskEmail(e.target.value)}
+                placeholder="kiosk-location@yourcompany.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password</Label>
+              <div className="relative">
+                <Input
+                  type={showKioskPassword ? "text" : "password"}
+                  value={kioskPassword}
+                  onChange={(e) => setKioskPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setShowKioskPassword(!showKioskPassword)}
+                >
+                  {showKioskPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              onClick={handleCreateKiosk}
+              disabled={kioskCreating || !kioskEmail || !kioskPassword || !kioskLocId}
+            >
+              {kioskCreating ? "Creating..." : "Create Kiosk Account"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

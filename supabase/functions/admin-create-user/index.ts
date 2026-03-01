@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const VALID_ROLES = ["admin", "manager", "shiftleader", "worker"];
+const VALID_ROLES = ["admin", "manager", "shiftleader", "worker", "kiosk"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -282,6 +282,21 @@ serve(async (req) => {
         .from("profiles")
         .update({ organization_id })
         .eq("user_id", newUser.user.id);
+    }
+
+    // For kiosk accounts, create the kiosk_accounts record
+    if (role === "kiosk" && body.location_id && newUser.user) {
+      // Set the role to kiosk (trigger defaults to worker, so we need to update)
+      await adminClient
+        .from("user_roles")
+        .update({ role: "kiosk" })
+        .eq("user_id", newUser.user.id);
+      
+      await adminClient.from("kiosk_accounts").insert({
+        user_id: newUser.user.id,
+        location_id: body.location_id,
+        created_by: caller.id,
+      });
     }
 
     // Assign locations if provided

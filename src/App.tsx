@@ -69,7 +69,7 @@ const App = () => (
             <Route path="/shiftleader" element={<ProtectedRoute allowedRoles={["shiftleader"]}><ShiftleaderDashboard /></ProtectedRoute>} />
 
             {/* Shared routes */}
-            <Route path="/kiosk" element={<ProtectedRoute allowedRoles={["shiftleader", "manager"]}><KioskPage /></ProtectedRoute>} />
+            <Route path="/kiosk" element={<ProtectedRoute allowedRoles={["shiftleader", "manager", "kiosk"]}><KioskPage /></ProtectedRoute>} />
             <Route path="/shiftschedule" element={<ProtectedRoute><ShiftSchedulePage /></ProtectedRoute>} />
             <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
 

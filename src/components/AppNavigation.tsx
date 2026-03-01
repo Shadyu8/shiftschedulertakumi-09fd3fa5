@@ -45,6 +45,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: "/worker/availability", label: "Availability", mobileLabel: "Avail", icon: <ClipboardList className="w-5 h-5" /> },
     { href: "/shiftschedule", label: "Shift Schedule", mobileLabel: "Shifts", icon: <ClipboardList className="w-5 h-5" /> },
   ],
+  kiosk: [],
 };
 
 export default function AppNavigation() {
