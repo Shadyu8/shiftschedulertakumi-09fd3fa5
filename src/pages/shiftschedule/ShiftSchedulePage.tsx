@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { format, addDays, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, CalendarDays, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -156,24 +156,25 @@ export default function ShiftSchedulePage() {
 
   const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+  const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const dateStr = format(selectedDate, "yyyy-MM-dd");
   const dayShifts = shifts
     .filter((s) => s.date === dateStr)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
-  function prevDay() {
-    setSelectedDate((d) => addDays(d, viewMode === "day" ? -1 : -7));
+  function prevPeriod() {
+    setSelectedDate((d) => addDays(d, viewMode === "day" ? -7 : -7));
   }
-  function nextDay() {
-    setSelectedDate((d) => addDays(d, viewMode === "day" ? 1 : 7));
+  function nextPeriod() {
+    setSelectedDate((d) => addDays(d, viewMode === "day" ? 7 : 7));
   }
   function goToday() {
     setSelectedDate(new Date());
   }
 
-  const dayLabel = viewMode === "day"
-    ? format(selectedDate, "EEEE, dd MMM yyyy")
+  const headerLabel = viewMode === "day"
+    ? format(selectedDate, "EEE dd MMM")
     : `${format(ws, "dd MMM")} – ${format(addDays(ws, 6), "dd MMM yyyy")}`;
 
   function renderShiftCard(s: Shift) {
@@ -270,51 +271,72 @@ export default function ShiftSchedulePage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-4 mb-6">
-        <h1 className="page-header">📆 Shift Schedule</h1>
-
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 mb-6">
+        {/* Top row: arrows + date label + location */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={prevPeriod} disabled={!selectedLoc} className="h-8 w-8">
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-xl font-bold text-foreground">{headerLabel}</h1>
+            <Button variant="ghost" size="icon" onClick={nextPeriod} disabled={!selectedLoc} className="h-8 w-8">
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
           <Select value={selectedLoc} onValueChange={setSelectedLoc}>
-            <SelectTrigger className="w-[180px]" disabled={locationsLoading || locations.length === 0}>
-              <SelectValue placeholder={locationsLoading ? "Loading..." : "Select location"} />
+            <SelectTrigger className="w-[140px] h-8 text-xs" disabled={locationsLoading || locations.length === 0}>
+              <SelectValue placeholder={locationsLoading ? "Loading..." : "Location"} />
             </SelectTrigger>
             <SelectContent>
               {locations.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
-                </SelectItem>
+                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={prevDay} disabled={!selectedLoc}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-medium text-foreground min-w-[180px] text-center text-sm">
-              {dayLabel}
-            </span>
-            <Button variant="outline" size="icon" onClick={nextDay} disabled={!selectedLoc}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={goToday} className="text-xs" disabled={!selectedLoc}>
-              Today
-            </Button>
-          </div>
-
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(v) => v && setViewMode(v as ViewMode)}
-          >
-            <ToggleGroupItem value="day" aria-label="Day view" className="gap-1.5 text-xs" disabled={!selectedLoc}>
-              <Calendar className="h-3.5 w-3.5" /> Day
+        {/* View toggle + Today */}
+        <div className="flex items-center gap-2">
+          <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
+            <ToggleGroupItem value="day" aria-label="Day view" className="text-xs px-4 rounded-full" disabled={!selectedLoc}>
+              Day
             </ToggleGroupItem>
-            <ToggleGroupItem value="week" aria-label="Week view" className="gap-1.5 text-xs" disabled={!selectedLoc}>
-              <CalendarDays className="h-3.5 w-3.5" /> Week
+            <ToggleGroupItem value="week" aria-label="Week view" className="text-xs px-4 rounded-full" disabled={!selectedLoc}>
+              Week
             </ToggleGroupItem>
           </ToggleGroup>
+          <Button variant="ghost" size="sm" onClick={goToday} className="text-xs ml-auto" disabled={!selectedLoc}>
+            Today
+          </Button>
         </div>
+
+        {/* Week day strip — tap to select day */}
+        {viewMode === "day" && (
+          <div className="flex justify-between border-b border-border pb-2">
+            {weekDays.map((day) => {
+              const dayFmt = format(day, "yyyy-MM-dd");
+              const isSelected = dayFmt === dateStr;
+              const isToday = dayFmt === todayStr;
+              return (
+                <button
+                  key={dayFmt}
+                  onClick={() => setSelectedDate(day)}
+                  className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-full transition-colors min-w-[40px] ${
+                    isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : isToday
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span className="text-[10px] font-semibold uppercase">{format(day, "EEEEEE")}</span>
+                  <span className="text-sm font-medium">{format(day, "d")}</span>
+                  {isToday && !isSelected && <span className="w-1 h-1 rounded-full bg-primary" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {locationsLoading ? (
