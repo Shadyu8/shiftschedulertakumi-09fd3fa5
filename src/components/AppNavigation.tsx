@@ -26,8 +26,9 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: "/manager/approvals", label: "Approvals", icon: <CheckSquare className="w-5 h-5" /> },
     { href: "/manager/schedule", label: "Schedule Builder", mobileLabel: "Builder", icon: <Calendar className="w-5 h-5" /> },
     { href: "/manager/exports", label: "Exports", icon: <FileText className="w-5 h-5" /> },
-    { href: "/manager/settings", label: "Settings", icon: <Settings className="w-5 h-5" /> },
     { href: "/shiftschedule", label: "Shift Schedule", mobileLabel: "Schedule", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/kiosk", label: "Kiosk", icon: <Monitor className="w-5 h-5" /> },
+    { href: "/manager/settings", label: "Settings", icon: <Settings className="w-5 h-5" /> },
   ],
   shiftleader: [
     { href: "/shiftleader", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -55,9 +56,9 @@ export default function AppNavigation() {
   const navItems = roleNavItems[role] || [];
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + "/");
 
-  // Mobile bottom: show up to 5 items (first 4 nav + account)
+  // Mobile bottom: all nav items + account (compact layout)
   const mobileItems = [
-    ...navItems.slice(0, 4),
+    ...navItems,
     { href: "/account", label: "Account", mobileLabel: "Account", icon: <User className="w-5 h-5" /> },
   ];
 
@@ -117,13 +118,13 @@ export default function AppNavigation() {
         </div>
       </aside>
 
-      {/* Mobile bottom navigation only — no top bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 py-1 flex justify-around">
+      {/* Mobile bottom navigation — all items */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 py-1 flex justify-around overflow-x-auto">
         {mobileItems.map((item) => (
           <Link
             key={item.href}
             to={item.href}
-            className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 ${
+            className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 shrink-0 ${
               isActive(item.href) ? "text-primary" : "text-muted-foreground"
             }`}
           >
@@ -132,7 +133,7 @@ export default function AppNavigation() {
             ) : (
               item.icon
             )}
-            <span className="truncate">{item.mobileLabel || item.label}</span>
+            <span className="truncate max-w-[48px]">{item.mobileLabel || item.label}</span>
           </Link>
         ))}
       </nav>
