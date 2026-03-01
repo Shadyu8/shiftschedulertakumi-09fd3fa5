@@ -302,6 +302,21 @@ export default function ManagerSchedule() {
     const w = workers.find((w) => w.user_id === id);
     return { userId: id, fullName: w?.full_name ?? "Unknown", role: "", availability: {} };
   });
+  // Check if there are publishable yellow availability boxes (with valid start times)
+  const hasPublishableAvailability = orderedAvailabilities.some((ua) =>
+    days.some((day) => {
+      const dateStr = toLocalDateStr(day);
+      const dow = getDayOfWeek(day);
+      const avail = ua.availability[dow];
+      const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
+      const workerShifts = shifts.filter((s) => s.user_id === ua.userId && s.date === dateStr);
+      const isDismissed = dismissedAvail.has(`${ua.userId}|${dateStr}`);
+      if (!isAvailable || workerShifts.length > 0 || isDismissed) return false;
+      const pending = getPendingEdit(ua.userId, dateStr, avail);
+      return !!pending.startTime;
+    })
+  );
+  const canPublish = hasUnpublished || hasPublishableAvailability;
   const todayStr = toLocalDateStr(new Date());
 
   // ── Actions ──
@@ -389,10 +404,50 @@ export default function ManagerSchedule() {
     setPublishing(true);
     const ws = toLocalDateStr(weekStart);
     const endDate = toLocalDateStr(addDays(weekStart, 6));
+
+    // Auto-create shifts from yellow availability boxes that have valid start times
+    const newShiftsToInsert: { user_id: string; location_id: string; date: string; start_time: string; end_time: string; standby: boolean; published: boolean }[] = [];
+    for (const ua of orderedAvailabilities) {
+      for (const day of days) {
+        const dateStr = toLocalDateStr(day);
+        const dow = getDayOfWeek(day);
+        const avail = ua.availability[dow];
+        const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
+        const workerShifts = shifts.filter((s) => s.user_id === ua.userId && s.date === dateStr);
+        const availKey = `${ua.userId}|${dateStr}`;
+        const isDismissed = dismissedAvail.has(availKey);
+
+        if (isAvailable && workerShifts.length === 0 && !isDismissed) {
+          const pending = getPendingEdit(ua.userId, dateStr, avail);
+          const startTime = pending.startTime;
+          const endTime = pending.endTime || "";
+          if (startTime) {
+            newShiftsToInsert.push({
+              user_id: ua.userId,
+              location_id: locationId,
+              date: dateStr,
+              start_time: startTime,
+              end_time: endTime,
+              standby: false,
+              published: true,
+            });
+          }
+        }
+      }
+    }
+
+    // Insert auto-created shifts
+    if (newShiftsToInsert.length > 0) {
+      const { error: insertErr } = await supabase.from("shifts").insert(newShiftsToInsert);
+      if (insertErr) { toast.error(insertErr.message); setPublishing(false); return; }
+    }
+
+    // Publish all existing unpublished shifts
     const { error } = await supabase.from("shifts").update({ published: true }).eq("location_id", locationId).gte("date", ws).lte("date", endDate);
     if (error) { toast.error(error.message); setPublishing(false); return; }
-    setShifts((prev) => prev.map((s) => ({ ...s, published: true })));
-    toast.success("All shifts published!");
+
+    await refreshShifts();
+    toast.success(`All shifts published!${newShiftsToInsert.length > 0 ? ` (${newShiftsToInsert.length} auto-created from availability)` : ""}`);
     setPublishing(false);
   }
 
@@ -593,7 +648,7 @@ export default function ManagerSchedule() {
         </div>
 
         {locationId && (
-          <Button onClick={publishAll} disabled={publishing || !hasUnpublished} className="ml-auto">
+          <Button onClick={publishAll} disabled={publishing || !canPublish} className="ml-auto">
             <Send className="w-4 h-4 mr-2" />
             {publishing ? "Publishing..." : "Publish Schedule"}
           </Button>
@@ -612,7 +667,7 @@ export default function ManagerSchedule() {
             </Select>
           </div>
           {locationId && (
-            <Button onClick={publishAll} disabled={publishing || !hasUnpublished} size="sm">
+            <Button onClick={publishAll} disabled={publishing || !canPublish} size="sm">
               <Send className="w-4 h-4 mr-1" />
               {publishing ? "..." : "Publish"}
             </Button>
