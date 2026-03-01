@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { format, startOfWeek, addDays } from "date-fns";
-import { ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -66,7 +66,7 @@ export default function WorkerSchedule() {
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
-  const totalHours = shifts.reduce((sum, s) => sum + calcHours(s.start_time, s.end_time), 0);
+  
 
   return (
     <AppLayout>
@@ -90,13 +90,6 @@ export default function WorkerSchedule() {
         </Button>
       </div>
 
-      {/* Weekly total banner */}
-      {shifts.length > 0 && (
-        <div className="bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 mb-5 flex items-center justify-between">
-          <span className="text-sm font-medium text-foreground">This week</span>
-          <span className="text-lg font-bold text-primary">{totalHours.toFixed(1)}h</span>
-        </div>
-      )}
 
       {/* Day cards */}
       <div className="space-y-3">
@@ -130,7 +123,6 @@ export default function WorkerSchedule() {
                 {dayShifts.length > 0 ? (
                   <div className="space-y-2">
                     {dayShifts.map((s) => {
-                      const hrs = calcHours(s.start_time, s.end_time);
                       return (
                         <div
                           key={s.id}
@@ -142,17 +134,13 @@ export default function WorkerSchedule() {
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-lg font-bold text-foreground">
-                              {hrs.toFixed(1)}h
+                              {s.start_time} – {s.end_time}
                             </span>
                             {s.standby && (
                               <span className="bg-warning/10 text-warning text-xs px-2.5 py-0.5 rounded-full font-semibold">
                                 Standby
                               </span>
                             )}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                            <Clock className="h-3.5 w-3.5 shrink-0" />
-                            <span>{s.start_time} – {s.end_time}</span>
                           </div>
                           {s.locations && (
                             <div className="flex items-center gap-1.5 text-muted-foreground text-xs mt-1">
