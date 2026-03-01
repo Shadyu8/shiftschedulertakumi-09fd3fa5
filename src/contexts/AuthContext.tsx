@@ -43,12 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let initialSessionHandled = false;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
           setUser(session.user);
-          // Use setTimeout to avoid Supabase auth deadlock
-          setTimeout(() => fetchProfileAndRole(session.user.id), 0);
+          // Avoid refetching if initial getSession already handled this
+          if (!initialSessionHandled) {
+            initialSessionHandled = true;
+            return;
+          }
+          await fetchProfileAndRole(session.user.id);
         } else {
           setUser(null);
           setProfile(null);
@@ -58,10 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      initialSessionHandled = true;
       if (session?.user) {
         setUser(session.user);
-        fetchProfileAndRole(session.user.id);
+        await fetchProfileAndRole(session.user.id);
       }
       setLoading(false);
     });

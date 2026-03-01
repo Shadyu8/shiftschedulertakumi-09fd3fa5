@@ -30,7 +30,9 @@ export default function ShiftSchedulePage() {
   const { user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [selectedLoc, setSelectedLoc] = useState("");
+  const [selectedLoc, setSelectedLoc] = useState(() => {
+    return localStorage.getItem("shiftschedule_selected_location") || "";
+  });
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("day");
@@ -75,7 +77,15 @@ export default function ShiftSchedulePage() {
         if (data) {
           const locs = data.map((d: any) => d.locations).filter(Boolean);
           setLocations(locs);
-          if (locs.length > 0 && !selectedLoc) setSelectedLoc(locs[0].id);
+          // Auto-select: saved preference > only location > first
+          const saved = localStorage.getItem("shiftschedule_selected_location");
+          if (saved && locs.some((l: Location) => l.id === saved)) {
+            setSelectedLoc(saved);
+          } else if (locs.length === 1) {
+            setSelectedLoc(locs[0].id);
+          } else if (locs.length > 0 && !selectedLoc) {
+            setSelectedLoc(locs[0].id);
+          }
         }
       });
   }, [user]);
@@ -241,7 +251,10 @@ export default function ShiftSchedulePage() {
         <h1 className="page-header">📆 Shift Schedule</h1>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <Select value={selectedLoc} onValueChange={setSelectedLoc}>
+          <Select value={selectedLoc} onValueChange={(v) => {
+            setSelectedLoc(v);
+            localStorage.setItem("shiftschedule_selected_location", v);
+          }}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Select location" />
             </SelectTrigger>
