@@ -7,8 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { FileText, Download } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { format, getDaysInMonth } from "date-fns";
 
 interface WorkerProfile {
@@ -35,7 +33,6 @@ export default function ManagerExports() {
 
   useEffect(() => {
     if (!profile?.organization_id) return;
-    // Fetch workers
     supabase
       .from("profiles")
       .select("user_id, full_name")
@@ -45,7 +42,6 @@ export default function ManagerExports() {
       .then(({ data }) => {
         if (data) setWorkers(data);
       });
-    // Fetch locations
     supabase
       .from("locations")
       .select("id, name")
@@ -55,7 +51,6 @@ export default function ManagerExports() {
       });
   }, [profile]);
 
-  // Generate month options (last 12 months)
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
     d.setMonth(d.getMonth() - i);
@@ -69,11 +64,14 @@ export default function ManagerExports() {
     return Math.max(0, (outH * 60 + outM - (inH * 60 + inM)) / 60);
   }
 
-  function formatHours(h: number): string {
-    return h.toFixed(2).replace(".", ",") + " hrs";
+  function escapeCsv(val: string): string {
+    if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+      return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
   }
 
-  async function generatePDF() {
+  async function generateCSV() {
     if (!profile?.organization_id) return;
     setLoading(true);
 
@@ -82,7 +80,6 @@ export default function ManagerExports() {
       const startDate = `${selectedMonth}-01`;
       const endDate = `${selectedMonth}-${getDaysInMonth(new Date(year, month - 1)).toString().padStart(2, "0")}`;
 
-      // Fetch approved punches for the month
       let query = supabase
         .from("time_punches")
         .select("*")
@@ -96,7 +93,6 @@ export default function ManagerExports() {
         query = query.eq("user_id", selectedWorker);
       }
 
-      // Also need to filter by org locations
       const locIds = Array.from(locations.keys());
       if (locIds.length > 0) {
         query = query.in("location_id", locIds);
@@ -116,82 +112,46 @@ export default function ManagerExports() {
         return;
       }
 
-      // Build worker name map
       const workerMap = new Map(workers.map((w) => [w.user_id, w.full_name]));
-      const monthLabel = format(new Date(year, month - 1), "MMMM yyyy");
 
-      const doc = new jsPDF();
+      // Build CSV
+      const headers = ["Worker", "Date", "Clock In", "Clock Out", "Hours", "Location"];
+      const rows = (punches as PunchRow[]).map((p) => [
+        escapeCsv(workerMap.get(p.user_id) || p.user_id),
+        format(new Date(p.date), "dd/MM/yyyy"),
+        p.punch_in,
+        p.punch_out || "",
+        calcHours(p.punch_in, p.punch_out).toFixed(2),
+        escapeCsv(locations.get(p.location_id) || ""),
+      ]);
 
-      // Title
-      doc.setFontSize(18);
-      doc.text("Time Punch Report", 14, 20);
-      doc.setFontSize(11);
-      doc.setTextColor(100);
-      doc.text(monthLabel, 14, 28);
-      if (selectedWorker !== "all") {
-        doc.text(`Worker: ${workerMap.get(selectedWorker) || "Unknown"}`, 14, 34);
-      }
-
-      // ── Summary table: total hours per worker ──
+      // Add summary rows at the end
       const hoursByWorker = new Map<string, number>();
       for (const p of punches as PunchRow[]) {
         const h = calcHours(p.punch_in, p.punch_out);
         hoursByWorker.set(p.user_id, (hoursByWorker.get(p.user_id) || 0) + h);
       }
 
-      const summaryRows = Array.from(hoursByWorker.entries())
-        .map(([uid, total]) => [workerMap.get(uid) || uid, formatHours(total)])
-        .sort((a, b) => a[0].localeCompare(b[0]));
+      const csvLines = [
+        headers.join(","),
+        ...rows.map((r) => r.join(",")),
+        "", // blank line
+        "Summary",
+        "Worker,Total Hours",
+        ...Array.from(hoursByWorker.entries())
+          .sort((a, b) => (workerMap.get(a[0]) || "").localeCompare(workerMap.get(b[0]) || ""))
+          .map(([uid, total]) => `${escapeCsv(workerMap.get(uid) || uid)},${total.toFixed(2)}`),
+        `TOTAL,${Array.from(hoursByWorker.values()).reduce((a, b) => a + b, 0).toFixed(2)}`,
+      ];
 
-      const grandTotal = Array.from(hoursByWorker.values()).reduce((a, b) => a + b, 0);
-
-      let startY = selectedWorker !== "all" ? 40 : 34;
-
-      doc.setFontSize(13);
-      doc.setTextColor(0);
-      doc.text("Summary", 14, startY);
-
-      autoTable(doc, {
-        startY: startY + 4,
-        head: [["Worker", "Total Hours"]],
-        body: [...summaryRows, ["TOTAL", formatHours(grandTotal)]],
-        theme: "grid",
-        headStyles: { fillColor: [59, 130, 246] },
-        styles: { fontSize: 10 },
-        didParseCell: (data: any) => {
-          // Bold total row
-          if (data.row.index === summaryRows.length) {
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
-      });
-
-      // ── Detail table: each punch ──
-      const detailY = (doc as any).lastAutoTable.finalY + 10;
-
-      doc.setFontSize(13);
-      doc.text("Detailed Punches", 14, detailY);
-
-      const detailRows = (punches as PunchRow[]).map((p) => [
-        workerMap.get(p.user_id) || p.user_id,
-        format(new Date(p.date), "dd/MM/yyyy"),
-        p.punch_in,
-        p.punch_out || "—",
-        formatHours(calcHours(p.punch_in, p.punch_out)),
-        locations.get(p.location_id) || "—",
-      ]);
-
-      autoTable(doc, {
-        startY: detailY + 4,
-        head: [["Worker", "Date", "Clock In", "Clock Out", "Hours", "Location"]],
-        body: detailRows,
-        theme: "striped",
-        headStyles: { fillColor: [59, 130, 246] },
-        styles: { fontSize: 9 },
-      });
-
-      doc.save(`punches_${selectedMonth}${selectedWorker !== "all" ? `_${workerMap.get(selectedWorker)?.replace(/\s/g, "_")}` : ""}.pdf`);
-      toast.success("PDF exported!");
+      const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `punches_${selectedMonth}${selectedWorker !== "all" ? `_${workerMap.get(selectedWorker)?.replace(/\s/g, "_")}` : ""}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("CSV exported!");
     } catch (err: any) {
       toast.error("Export failed: " + err.message);
     }
@@ -205,10 +165,10 @@ export default function ManagerExports() {
       <div className="stat-card max-w-lg space-y-5">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="w-5 h-5 text-primary" />
-          <h2 className="font-semibold text-foreground text-lg">Time Punch PDF</h2>
+          <h2 className="font-semibold text-foreground text-lg">Time Punch CSV</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Export a PDF with total hours per worker and detailed clock in/out records for the selected month.
+          Export a CSV with total hours per worker and detailed clock in/out records for the selected month.
           Only approved punches are included.
         </p>
 
@@ -239,9 +199,9 @@ export default function ManagerExports() {
           </div>
         </div>
 
-        <Button onClick={generatePDF} disabled={loading} className="w-full">
+        <Button onClick={generateCSV} disabled={loading} className="w-full">
           <Download className="w-4 h-4 mr-2" />
-          {loading ? "Generating..." : "Export PDF"}
+          {loading ? "Generating..." : "Export CSV"}
         </Button>
       </div>
     </AppLayout>
