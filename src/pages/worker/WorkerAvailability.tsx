@@ -1,88 +1,132 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { format, startOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, addDays, isBefore, isToday, startOfDay } from "date-fns";
+import { ChevronLeft, ChevronRight, Lock, Send } from "lucide-react";
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+// day_of_week: 1=Mon .. 7=Sun (matches schedule builder)
+const DAYS = [
+  { dow: 1, label: "Monday" },
+  { dow: 2, label: "Tuesday" },
+  { dow: 3, label: "Wednesday" },
+  { dow: 4, label: "Thursday" },
+  { dow: 5, label: "Friday" },
+  { dow: 6, label: "Saturday" },
+  { dow: 7, label: "Sunday" },
+];
+
+// Presets matching what schedule builder expects
 const PRESETS = [
-  { value: "morning", label: "Morning (11:30–17:00)" },
-  { value: "evening", label: "Evening (17:00–23:00)" },
-  { value: "full", label: "Full Day (11:30–23:00)" },
-  { value: "custom", label: "Custom" },
+  { value: "ALL_DAY", label: "All Day", start: "11:30", end: "23:00" },
+  { value: "UNTIL_17", label: "Until 17:00", start: "11:30", end: "17:00" },
+  { value: "FROM_13", label: "From 13:00", start: "13:00", end: "23:00" },
+  { value: "FROM_15", label: "From 15:00", start: "15:00", end: "23:00" },
+  { value: "FROM_17", label: "From 17:00", start: "17:00", end: "23:00" },
+  { value: "UNAVAILABLE", label: "Unavailable", start: null, end: null },
 ];
 
 interface AvailabilityEntry {
   id?: string;
   day_of_week: number;
   available: boolean;
-  start_time: string;
-  end_time: string;
+  start_time: string | null;
+  end_time: string | null;
   preset: string;
+}
+
+function getMonWeekStart(date: Date): Date {
+  return startOfWeek(date, { weekStartsOn: 1 });
 }
 
 export default function WorkerAvailability() {
   const { user, profile } = useAuth();
   const [entries, setEntries] = useState<AvailabilityEntry[]>([]);
-  const [weekStart, setWeekStart] = useState(() =>
-    format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
-  );
+  const [weekStart, setWeekStart] = useState(() => getMonWeekStart(new Date()));
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const weekStartStr = format(weekStart, "yyyy-MM-dd");
+  const weekEndDate = addDays(weekStart, 6);
+  const isLocked = profile?.availability_locked;
+
+  // Check if this week is in the past (can't edit past weeks)
+  const isPastWeek = isBefore(weekEndDate, startOfDay(new Date())) && !isToday(weekEndDate);
 
   useEffect(() => {
     if (!user) return;
+    setLoading(true);
     supabase
       .from("availability")
       .select("*")
       .eq("user_id", user.id)
-      .eq("week_start", weekStart)
+      .eq("week_start", weekStartStr)
       .then(({ data }) => {
         if (data && data.length > 0) {
+          setSubmitted(true);
           setEntries(
-            DAYS.map((_, i) => {
-              const existing = data.find((d: any) => d.day_of_week === i);
-              return existing
-                ? { id: existing.id, day_of_week: i, available: existing.available, start_time: existing.start_time || "", end_time: existing.end_time || "", preset: existing.preset || "full" }
-                : { day_of_week: i, available: true, start_time: "11:30", end_time: "23:00", preset: "full" };
+            DAYS.map((d) => {
+              const existing = data.find((row: any) => row.day_of_week === d.dow);
+              if (existing) {
+                return {
+                  id: existing.id,
+                  day_of_week: d.dow,
+                  available: existing.available,
+                  start_time: existing.start_time,
+                  end_time: existing.end_time,
+                  preset: existing.preset || "ALL_DAY",
+                };
+              }
+              return { day_of_week: d.dow, available: true, start_time: "11:30", end_time: "23:00", preset: "ALL_DAY" };
             })
           );
         } else {
-          setEntries(DAYS.map((_, i) => ({
-            day_of_week: i, available: true, start_time: "11:30", end_time: "23:00", preset: "full",
-          })));
+          setSubmitted(false);
+          setEntries(
+            DAYS.map((d) => ({
+              day_of_week: d.dow,
+              available: true,
+              start_time: "11:30",
+              end_time: "23:00",
+              preset: "ALL_DAY",
+            }))
+          );
         }
+        setLoading(false);
       });
-  }, [user, weekStart]);
+  }, [user, weekStartStr]);
 
-  function updateEntry(index: number, updates: Partial<AvailabilityEntry>) {
-    setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, ...updates } : e)));
+  function selectPreset(index: number, presetValue: string) {
+    const preset = PRESETS.find((p) => p.value === presetValue);
+    if (!preset) return;
+    setEntries((prev) =>
+      prev.map((e, i) =>
+        i === index
+          ? {
+              ...e,
+              preset: presetValue,
+              available: presetValue !== "UNAVAILABLE",
+              start_time: preset.start,
+              end_time: preset.end,
+            }
+          : e
+      )
+    );
   }
 
-  function applyPreset(index: number, preset: string) {
-    const times: Record<string, { start: string; end: string }> = {
-      morning: { start: "11:30", end: "17:00" },
-      evening: { start: "17:00", end: "23:00" },
-      full: { start: "11:30", end: "23:00" },
-    };
-    const t = times[preset] || { start: "11:30", end: "23:00" };
-    updateEntry(index, { preset, start_time: t.start, end_time: t.end });
-  }
-
-  async function handleSave() {
+  async function handleSubmit() {
     if (!user) return;
     setSaving(true);
     try {
       // Delete existing for this week
-      await supabase.from("availability").delete().eq("user_id", user.id).eq("week_start", weekStart);
+      await supabase.from("availability").delete().eq("user_id", user.id).eq("week_start", weekStartStr);
       // Insert new
       const rows = entries.map((e) => ({
         user_id: user.id,
-        week_start: weekStart,
+        week_start: weekStartStr,
         day_of_week: e.day_of_week,
         available: e.available,
         start_time: e.available ? e.start_time : null,
@@ -91,7 +135,8 @@ export default function WorkerAvailability() {
       }));
       const { error } = await supabase.from("availability").insert(rows);
       if (error) throw error;
-      toast.success("Availability saved!");
+      setSubmitted(true);
+      toast.success("Availability submitted! 🎉");
     } catch (err: any) {
       toast.error(err.message || "Failed to save");
     } finally {
@@ -99,73 +144,115 @@ export default function WorkerAvailability() {
     }
   }
 
-  const locked = profile?.availability_locked;
+  const canEdit = !submitted && !isLocked && !isPastWeek;
+  const weekLabel = `${format(weekStart, "d MMM")} – ${format(weekEndDate, "d MMM yyyy")}`;
 
   return (
     <AppLayout>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="page-header">📋 Availability</h1>
-        <div className="flex gap-3 items-center">
-          <Input type="date" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} className="w-[180px]" />
-          {locked && <span className="text-xs text-warning font-medium bg-warning/10 px-2 py-1 rounded">🔒 Locked</span>}
+      <h1 className="page-header mb-2">📋 Availability</h1>
+      <p className="text-sm text-muted-foreground mb-6">
+        Set your availability for each week. Once submitted, it's locked so the manager can build the schedule.
+      </p>
+
+      {/* Week navigation */}
+      <div className="flex items-center justify-between mb-6">
+        <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, -7))}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <div className="text-center">
+          <p className="font-semibold text-foreground text-sm">{weekLabel}</p>
+          {submitted && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">
+              <Lock className="w-3 h-3" /> Submitted
+            </span>
+          )}
+          {isPastWeek && !submitted && (
+            <span className="text-xs text-muted-foreground mt-1 block">Past week</span>
+          )}
+          {isLocked && (
+            <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-0.5 rounded-full mt-1">
+              <Lock className="w-3 h-3" /> Locked by manager
+            </span>
+          )}
         </div>
+        <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, 7))}>
+          <ChevronRight className="w-4 h-4" />
+        </Button>
       </div>
 
-      <div className="space-y-3 mb-6">
-        {entries.map((entry, i) => {
-          const dayDate = addDays(new Date(weekStart), i);
-          return (
-            <div key={i} className="stat-card">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-foreground">{DAYS[i]}</h3>
-                  <p className="text-xs text-muted-foreground">{format(dayDate, "dd/MM/yyyy")}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{entry.available ? "Available" : "Off"}</span>
-                  <Switch
-                    checked={entry.available}
-                    onCheckedChange={(v) => updateEntry(i, { available: v })}
-                    disabled={!!locked}
-                  />
-                </div>
-              </div>
-              {entry.available && (
-                <div className="flex flex-wrap gap-3 items-end">
-                  <Select value={entry.preset} onValueChange={(v) => applyPreset(i, v)} disabled={!!locked}>
-                    <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PRESETS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {entry.preset === "custom" && (
-                    <>
-                      <Input
-                        type="time"
-                        value={entry.start_time}
-                        onChange={(e) => updateEntry(i, { start_time: e.target.value })}
-                        className="w-[120px]"
-                        disabled={!!locked}
-                      />
-                      <Input
-                        type="time"
-                        value={entry.end_time}
-                        onChange={(e) => updateEntry(i, { end_time: e.target.value })}
-                        className="w-[120px]"
-                        disabled={!!locked}
-                      />
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {/* Today button */}
+      <div className="flex justify-center mb-4">
+        <Button variant="outline" size="sm" onClick={() => setWeekStart(getMonWeekStart(new Date()))}>
+          This Week
+        </Button>
       </div>
 
-      <Button onClick={handleSave} disabled={saving || !!locked} className="w-full sm:w-auto">
-        {saving ? "Saving..." : "Save Availability"}
-      </Button>
+      {loading ? (
+        <p className="text-muted-foreground text-center py-8 animate-pulse">Loading...</p>
+      ) : (
+        <>
+          {/* Day entries */}
+          <div className="space-y-2 mb-6">
+            {entries.map((entry, i) => {
+              const dayInfo = DAYS[i];
+              const dayDate = addDays(weekStart, i);
+              const isSelectedPreset = (pv: string) => entry.preset === pv;
+
+              return (
+                <div key={dayInfo.dow} className="bg-card border border-border rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-foreground text-sm">{dayInfo.label}</h3>
+                      <p className="text-xs text-muted-foreground">{format(dayDate, "dd/MM")}</p>
+                    </div>
+                    {entry.preset === "UNAVAILABLE" ? (
+                      <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded">Unavailable</span>
+                    ) : (
+                      <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded">
+                        {entry.start_time} – {entry.end_time}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Preset buttons */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESETS.map((p) => (
+                      <button
+                        key={p.value}
+                        onClick={() => canEdit && selectPreset(i, p.value)}
+                        disabled={!canEdit}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                          isSelectedPreset(p.value)
+                            ? p.value === "UNAVAILABLE"
+                              ? "bg-destructive text-destructive-foreground border-destructive"
+                              : "bg-primary text-primary-foreground border-primary"
+                            : "bg-muted text-muted-foreground border-border hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Submit button */}
+          {canEdit && (
+            <Button onClick={handleSubmit} disabled={saving} className="w-full" size="lg">
+              <Send className="w-4 h-4 mr-2" />
+              {saving ? "Submitting..." : "Submit Availability"}
+            </Button>
+          )}
+
+          {submitted && (
+            <p className="text-sm text-muted-foreground text-center">
+              Your availability for this week has been submitted and locked. Navigate to another week to submit new availability.
+            </p>
+          )}
+        </>
+      )}
     </AppLayout>
   );
 }
