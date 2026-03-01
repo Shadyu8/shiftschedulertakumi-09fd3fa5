@@ -15,11 +15,18 @@ interface Location {
   name: string;
 }
 
+interface ShiftInfo {
+  id: string;
+  start_time: string;
+  end_time: string;
+}
+
 interface WorkerInfo {
   user_id: string;
   full_name: string;
   profile_picture: string | null;
   activePunch?: { id: string; punch_in: string } | null;
+  todayShift?: ShiftInfo | null;
 }
 
 type KioskState = "setup" | "active";
@@ -127,12 +134,39 @@ export default function KioskPage() {
     setFeedback(null);
   }
 
+  // Round clock-in time based on shift start with quarter-hour rounding (7-min boundary)
+  function roundClockInTime(shiftStart: string | null): string {
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    if (shiftStart) {
+      const [sh, sm] = shiftStart.split(":").map(Number);
+      const shiftMins = sh * 60 + sm;
+      // If early, use shift start
+      if (nowMins <= shiftMins) {
+        return shiftStart;
+      }
+    }
+
+    // Quarter-hour rounding: remainder < 7 → round down, >= 7 → round up
+    const remainder = nowMins % 15;
+    const roundedMins = remainder < 7 ? nowMins - remainder : nowMins + (15 - remainder);
+
+    if (shiftStart) {
+      const [sh, sm] = shiftStart.split(":").map(Number);
+      const shiftMins = sh * 60 + sm;
+      const finalMins = Math.max(roundedMins, shiftMins);
+      return `${String(Math.floor(finalMins / 60)).padStart(2, "0")}:${String(finalMins % 60).padStart(2, "0")}`;
+    }
+
+    return `${String(Math.floor(roundedMins / 60)).padStart(2, "0")}:${String(roundedMins % 60).padStart(2, "0")}`;
+  }
+
   const lookupWorker = useCallback(async (uniqueKey: string) => {
     setLookupLoading(true);
     setFeedback(null);
     setWorkerInfo(null);
 
-    // RLS already filters profiles by organization
     const { data: profileData, error } = await supabase
       .from("profiles")
       .select("user_id, full_name, profile_picture")
@@ -145,19 +179,29 @@ export default function KioskPage() {
       return;
     }
 
-    // Check active punch
-    const { data: punchData } = await supabase
-      .from("time_punches")
-      .select("id, punch_in")
-      .eq("user_id", profileData.user_id)
-      .eq("location_id", selectedLoc)
-      .eq("date", today)
-      .is("punch_out", null)
-      .maybeSingle();
+    // Fetch today's shift and active punch in parallel
+    const [punchRes, shiftRes] = await Promise.all([
+      supabase
+        .from("time_punches")
+        .select("id, punch_in")
+        .eq("user_id", profileData.user_id)
+        .eq("location_id", selectedLoc)
+        .eq("date", today)
+        .is("punch_out", null)
+        .maybeSingle(),
+      supabase
+        .from("shifts")
+        .select("id, start_time, end_time")
+        .eq("user_id", profileData.user_id)
+        .eq("location_id", selectedLoc)
+        .eq("date", today)
+        .maybeSingle(),
+    ]);
 
     setWorkerInfo({
       ...profileData,
-      activePunch: punchData || null,
+      activePunch: punchRes.data || null,
+      todayShift: shiftRes.data || null,
     });
     setLookupLoading(false);
   }, [selectedLoc, today]);
@@ -165,18 +209,18 @@ export default function KioskPage() {
   async function handleClockIn() {
     if (!workerInfo) return;
     setActionLoading(true);
-    const now = new Date().toTimeString().slice(0, 5);
+    const clockInTime = roundClockInTime(workerInfo.todayShift?.start_time || null);
     const { error } = await supabase.from("time_punches").insert({
       user_id: workerInfo.user_id,
       location_id: selectedLoc,
       date: today,
-      punch_in: now,
+      punch_in: clockInTime,
       recorded_in_by_id: user?.id,
     });
     if (error) {
       setFeedback({ type: "error", message: error.message });
     } else {
-      setFeedback({ type: "success", message: `${workerInfo.full_name} clocked in at ${now}` });
+      setFeedback({ type: "success", message: `${workerInfo.full_name} clocked in at ${clockInTime}` });
     }
     setActionLoading(false);
     setTimeout(() => {
@@ -315,10 +359,20 @@ export default function KioskPage() {
               </div>
             )}
             <p className="text-xl font-bold text-foreground mb-1">{workerInfo.full_name}</p>
+            {workerInfo.todayShift ? (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-2 mb-3">
+                <p className="text-sm font-medium text-primary">Today's shift</p>
+                <p className="text-lg font-bold text-foreground">{workerInfo.todayShift.start_time} – {workerInfo.todayShift.end_time}</p>
+              </div>
+            ) : (
+              <div className="bg-muted rounded-lg px-4 py-2 mb-3">
+                <p className="text-sm font-medium text-muted-foreground">Not working today</p>
+              </div>
+            )}
             {workerInfo.activePunch ? (
               <p className="text-sm text-muted-foreground mb-4">Clocked in since {workerInfo.activePunch.punch_in}</p>
             ) : (
-              <p className="text-sm text-muted-foreground mb-4">Not clocked in</p>
+              <p className="text-sm text-muted-foreground mb-4">{workerInfo.todayShift ? "Not clocked in yet" : "Not clocked in"}</p>
             )}
             <div className="flex gap-3">
               {workerInfo.activePunch ? (
