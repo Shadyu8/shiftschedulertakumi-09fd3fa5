@@ -8,8 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Lock, Unlock, Pencil, Shield, UserX, UserCheck } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Trash2, Lock, Unlock, Pencil, Shield, UserX, UserCheck, MapPin } from "lucide-react";
 import { toast } from "sonner";
+
+interface Location {
+  id: string;
+  name: string;
+}
 
 interface Worker {
   id: string;
@@ -19,6 +25,7 @@ interface Worker {
   active: boolean;
   availability_locked: boolean;
   role?: string;
+  location_ids?: string[];
 }
 
 export default function ManagerUsers() {
@@ -28,6 +35,8 @@ export default function ManagerUsers() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [creating, setCreating] = useState(false);
 
   // Edit dialog state
@@ -36,6 +45,7 @@ export default function ManagerUsers() {
   const [editRole, setEditRole] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editLocations, setEditLocations] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Delete confirmation
@@ -44,29 +54,43 @@ export default function ManagerUsers() {
 
   async function fetchWorkers() {
     if (!profile?.organization_id) return;
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("organization_id", profile.organization_id)
-      .neq("user_id", profile.user_id)
-      .order("full_name");
+    const [{ data: profileData }, { data: locData }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("organization_id", profile.organization_id)
+        .neq("user_id", profile.user_id)
+        .order("full_name"),
+      supabase
+        .from("locations")
+        .select("id, name")
+        .eq("organization_id", profile.organization_id),
+    ]);
 
+    if (locData) setLocations(locData);
     if (!profileData) return;
 
-    // Fetch roles for all workers
+    // Fetch roles and locations for all workers
     const userIds = profileData.map((p: any) => p.user_id);
-    const { data: rolesData } = await supabase
-      .from("user_roles")
-      .select("user_id, role")
-      .in("user_id", userIds);
+    const [{ data: rolesData }, { data: userLocsData }] = await Promise.all([
+      supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
+      supabase.from("user_locations").select("user_id, location_id").in("user_id", userIds),
+    ]);
 
     const roleMap = new Map<string, string>();
     rolesData?.forEach((r: any) => roleMap.set(r.user_id, r.role));
+
+    const locMap = new Map<string, string[]>();
+    userLocsData?.forEach((ul: any) => {
+      if (!locMap.has(ul.user_id)) locMap.set(ul.user_id, []);
+      locMap.get(ul.user_id)!.push(ul.location_id);
+    });
 
     setWorkers(
       profileData.map((w: any) => ({
         ...w,
         role: roleMap.get(w.user_id) || "worker",
+        location_ids: locMap.get(w.user_id) || [],
       }))
     );
   }
@@ -79,12 +103,12 @@ export default function ManagerUsers() {
     setCreating(true);
     try {
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, password, role, organization_id: profile?.organization_id },
+        body: { email, full_name: fullName, password, role, organization_id: profile?.organization_id, location_ids: selectedLocations },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("User created");
-      setEmail(""); setFullName(""); setPassword("");
+      setEmail(""); setFullName(""); setPassword(""); setSelectedLocations([]);
       fetchWorkers();
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
@@ -105,6 +129,7 @@ export default function ManagerUsers() {
     setEditRole(w.role || "worker");
     setEditPassword("");
     setEditActive(w.active);
+    setEditLocations(w.location_ids || []);
   }
 
   async function handleSaveEdit() {
@@ -117,6 +142,7 @@ export default function ManagerUsers() {
         full_name: editName,
         role: editRole,
         active: editActive,
+        location_ids: editLocations,
       };
       if (editPassword.trim()) body.password = editPassword;
 
@@ -180,6 +206,26 @@ export default function ManagerUsers() {
             </SelectContent>
           </Select>
         </div>
+        {locations.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Locations</Label>
+            <div className="flex flex-wrap gap-3">
+              {locations.map((loc) => (
+                <label key={loc.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={selectedLocations.includes(loc.id)}
+                    onCheckedChange={(checked) => {
+                      setSelectedLocations((prev) =>
+                        checked ? [...prev, loc.id] : prev.filter((id) => id !== loc.id)
+                      );
+                    }}
+                  />
+                  {loc.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <Button type="submit" disabled={creating}>
           <Plus className="w-4 h-4 mr-2" /> {creating ? "Creating..." : "Add User"}
         </Button>
@@ -202,6 +248,14 @@ export default function ManagerUsers() {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground truncate">{w.username}</p>
+                {w.location_ids && w.location_ids.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                    <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs text-muted-foreground">
+                      {w.location_ids.map((lid) => locations.find((l) => l.id === lid)?.name).filter(Boolean).join(", ") || "—"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
@@ -263,6 +317,26 @@ export default function ManagerUsers() {
                 {editActive ? <><UserCheck className="w-3.5 h-3.5 mr-1.5" /> Active</> : <><UserX className="w-3.5 h-3.5 mr-1.5" /> Inactive</>}
               </Button>
             </div>
+            {locations.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Locations</Label>
+                <div className="flex flex-wrap gap-3">
+                  {locations.map((loc) => (
+                    <label key={loc.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={editLocations.includes(loc.id)}
+                        onCheckedChange={(checked) => {
+                          setEditLocations((prev) =>
+                            checked ? [...prev, loc.id] : prev.filter((id) => id !== loc.id)
+                          );
+                        }}
+                      />
+                      {loc.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 pt-2">
               <Button onClick={handleSaveEdit} disabled={saving || !editName.trim()} className="flex-1">
                 {saving ? "Saving..." : "Save Changes"}

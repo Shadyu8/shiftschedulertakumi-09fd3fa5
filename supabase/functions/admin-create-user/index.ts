@@ -182,6 +182,19 @@ serve(async (req) => {
         }
       }
 
+      // Update locations if provided
+      if (body.location_ids && Array.isArray(body.location_ids)) {
+        // Remove existing locations
+        await adminClient.from("user_locations").delete().eq("user_id", body.user_id);
+        // Insert new ones
+        const locationRows = body.location_ids
+          .filter((id: string) => UUID_REGEX.test(id))
+          .map((location_id: string) => ({ user_id: body.user_id, location_id }));
+        if (locationRows.length > 0) {
+          await adminClient.from("user_locations").insert(locationRows);
+        }
+      }
+
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -269,6 +282,16 @@ serve(async (req) => {
         .from("profiles")
         .update({ organization_id })
         .eq("user_id", newUser.user.id);
+    }
+
+    // Assign locations if provided
+    if (body.location_ids && Array.isArray(body.location_ids) && newUser.user) {
+      const locationRows = body.location_ids
+        .filter((id: string) => UUID_REGEX.test(id))
+        .map((location_id: string) => ({ user_id: newUser.user!.id, location_id }));
+      if (locationRows.length > 0) {
+        await adminClient.from("user_locations").insert(locationRows);
+      }
     }
 
     return new Response(JSON.stringify({ success: true, user_id: newUser.user?.id }), {
