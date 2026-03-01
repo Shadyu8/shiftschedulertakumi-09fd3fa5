@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Calendar } from "lucide-react";
@@ -11,8 +11,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, user, role } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect once authenticated with role
+  useEffect(() => {
+    if (user && role) {
+      const routes: Record<string, string> = {
+        admin: "/admin",
+        manager: "/manager",
+        shiftleader: "/shiftleader",
+        worker: "/worker",
+      };
+      navigate(routes[role] || "/", { replace: true });
+    }
+  }, [user, role, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,12 +36,11 @@ export default function LoginPage() {
       const { error } = await signIn(email, password);
       if (error) {
         setError(error);
-      } else {
-        navigate("/");
+        setLoading(false);
       }
+      // Navigation is handled by Index via auth state change — no explicit navigate needed
     } catch {
       setError("Network error. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
