@@ -114,35 +114,45 @@ export default function ManagerExports() {
 
       const workerMap = new Map(workers.map((w) => [w.user_id, w.full_name]));
 
-      // Build CSV
-      const headers = ["Worker", "Date", "Clock In", "Clock Out", "Hours", "Location"];
-      const rows = (punches as PunchRow[]).map((p) => [
-        escapeCsv(workerMap.get(p.user_id) || p.user_id),
-        format(new Date(p.date), "dd/MM/yyyy"),
-        p.punch_in,
-        p.punch_out || "",
-        calcHours(p.punch_in, p.punch_out).toFixed(2),
-        escapeCsv(locations.get(p.location_id) || ""),
-      ]);
-
-      // Add summary rows at the end
+      // Calculate hours per worker
       const hoursByWorker = new Map<string, number>();
       for (const p of punches as PunchRow[]) {
         const h = calcHours(p.punch_in, p.punch_out);
         hoursByWorker.set(p.user_id, (hoursByWorker.get(p.user_id) || 0) + h);
       }
 
-      const csvLines = [
-        headers.join(","),
-        ...rows.map((r) => r.join(",")),
-        "", // blank line
-        "Summary",
-        "Worker,Total Hours",
-        ...Array.from(hoursByWorker.entries())
-          .sort((a, b) => (workerMap.get(a[0]) || "").localeCompare(workerMap.get(b[0]) || ""))
-          .map(([uid, total]) => `${escapeCsv(workerMap.get(uid) || uid)},${total.toFixed(2)}`),
-        `TOTAL,${Array.from(hoursByWorker.values()).reduce((a, b) => a + b, 0).toFixed(2)}`,
-      ];
+      let csvLines: string[];
+
+      if (selectedWorker === "all") {
+        // All workers: just name + total hours
+        csvLines = [
+          "Worker,Total Hours",
+          ...Array.from(hoursByWorker.entries())
+            .sort((a, b) => (workerMap.get(a[0]) || "").localeCompare(workerMap.get(b[0]) || ""))
+            .map(([uid, total]) => `${escapeCsv(workerMap.get(uid) || uid)},${total.toFixed(2)}`),
+          `TOTAL,${Array.from(hoursByWorker.values()).reduce((a, b) => a + b, 0).toFixed(2)}`,
+        ];
+      } else {
+        // Individual worker: detailed punches + summary
+        const headers = ["Worker", "Date", "Clock In", "Clock Out", "Hours", "Location"];
+        const rows = (punches as PunchRow[]).map((p) => [
+          escapeCsv(workerMap.get(p.user_id) || p.user_id),
+          format(new Date(p.date), "dd/MM/yyyy"),
+          p.punch_in,
+          p.punch_out || "",
+          calcHours(p.punch_in, p.punch_out).toFixed(2),
+          escapeCsv(locations.get(p.location_id) || ""),
+        ]);
+
+        const total = Array.from(hoursByWorker.values()).reduce((a, b) => a + b, 0);
+        csvLines = [
+          headers.join(","),
+          ...rows.map((r) => r.join(",")),
+          "",
+          "Summary",
+          `Total Hours,${total.toFixed(2)}`,
+        ];
+      }
 
       const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
