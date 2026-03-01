@@ -102,8 +102,8 @@ export default function WorkerSchedule() {
               {/* Date bubble */}
               <div
                 className={`flex flex-col items-center justify-center rounded-2xl w-16 min-h-[72px] shrink-0 ${
-                  isToday
-                    ? "bg-primary text-primary-foreground"
+                  dayShifts.length > 0
+                    ? "bg-green-600 text-white"
                     : "bg-muted text-muted-foreground"
                 }`}
               >
