@@ -3,11 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format, startOfWeek, addDays, isBefore, isToday, startOfDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Lock, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Send, Save, Download } from "lucide-react";
 
-// day_of_week: 1=Mon .. 7=Sun (matches schedule builder)
 const DAYS = [
   { dow: 1, label: "Monday" },
   { dow: 2, label: "Tuesday" },
@@ -18,14 +18,17 @@ const DAYS = [
   { dow: 7, label: "Sunday" },
 ];
 
-// Presets matching what schedule builder expects
 const PRESETS = [
-  { value: "ALL_DAY", label: "All Day", start: "11:30", end: "23:00" },
-  { value: "UNTIL_17", label: "Until 17:00", start: "11:30", end: "17:00" },
-  { value: "FROM_13", label: "From 13:00", start: "13:00", end: "23:00" },
-  { value: "FROM_15", label: "From 15:00", start: "15:00", end: "23:00" },
-  { value: "FROM_17", label: "From 17:00", start: "17:00", end: "23:00" },
-  { value: "UNAVAILABLE", label: "Unavailable", start: null, end: null },
+  { value: "ALL_DAY", label: "All Day" },
+  { value: "UNTIL_16", label: "Until 16:00" },
+  { value: "UNTIL_17", label: "Until 17:00" },
+  { value: "FROM_13", label: "From 13:00" },
+  { value: "FROM_14", label: "From 14:00" },
+  { value: "FROM_15", label: "From 15:00" },
+  { value: "FROM_16", label: "From 16:00" },
+  { value: "FROM_17", label: "From 17:00" },
+  { value: "CUSTOM", label: "Custom" },
+  { value: "UNAVAILABLE", label: "Unavailable" },
 ];
 
 interface AvailabilityEntry {
@@ -37,8 +40,57 @@ interface AvailabilityEntry {
   preset: string;
 }
 
+interface LocationConfig {
+  earliest_shift_start: string;
+  latest_shift_end: string;
+  availability_earliest_time: string;
+  availability_latest_time: string;
+}
+
 function getMonWeekStart(date: Date): Date {
   return startOfWeek(date, { weekStartsOn: 1 });
+}
+
+function generate30MinSlots(earliest: string, latest: string): string[] {
+  const [eh, em] = earliest.split(":").map(Number);
+  const [lh, lm] = latest.split(":").map(Number);
+  const startMins = eh * 60 + em;
+  const endMins = lh * 60 + lm;
+  const slots: string[] = [];
+  for (let t = startMins; t <= endMins; t += 30) {
+    const h = Math.floor(t / 60);
+    const m = t % 60;
+    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+  }
+  return slots;
+}
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function getPresetTimes(preset: string, config: LocationConfig): { start: string | null; end: string | null } {
+  switch (preset) {
+    case "ALL_DAY": return { start: config.earliest_shift_start, end: config.latest_shift_end };
+    case "UNTIL_16": return { start: config.earliest_shift_start, end: "16:00" };
+    case "UNTIL_17": return { start: config.earliest_shift_start, end: "17:00" };
+    case "FROM_13": return { start: "13:00", end: config.latest_shift_end };
+    case "FROM_14": return { start: "14:00", end: config.latest_shift_end };
+    case "FROM_15": return { start: "15:00", end: config.latest_shift_end };
+    case "FROM_16": return { start: "16:00", end: config.latest_shift_end };
+    case "FROM_17": return { start: "17:00", end: config.latest_shift_end };
+    case "UNAVAILABLE": return { start: null, end: null };
+    default: return { start: null, end: null };
+  }
+}
+
+function formatBadge(entry: AvailabilityEntry): string {
+  if (entry.preset === "UNAVAILABLE") return "Unavailable";
+  if (entry.preset === "ALL_DAY") return "All Day";
+  if (entry.preset === "CUSTOM" && entry.start_time && entry.end_time) return `${entry.start_time} – ${entry.end_time}`;
+  if (entry.start_time && entry.end_time) return `${entry.start_time} – ${entry.end_time}`;
+  return "";
 }
 
 export default function WorkerAvailability() {
@@ -48,14 +100,65 @@ export default function WorkerAvailability() {
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasTemplate, setHasTemplate] = useState(false);
+  const [locationConfig, setLocationConfig] = useState<LocationConfig>({
+    earliest_shift_start: "11:30",
+    latest_shift_end: "23:00",
+    availability_earliest_time: "12:00",
+    availability_latest_time: "19:00",
+  });
 
   const weekStartStr = format(weekStart, "yyyy-MM-dd");
   const weekEndDate = addDays(weekStart, 6);
   const isLocked = profile?.availability_locked;
-
-  // Check if this week is in the past (can't edit past weeks)
   const isPastWeek = isBefore(weekEndDate, startOfDay(new Date())) && !isToday(weekEndDate);
 
+  const customTimeSlots = useMemo(
+    () => generate30MinSlots(locationConfig.availability_earliest_time, locationConfig.availability_latest_time),
+    [locationConfig.availability_earliest_time, locationConfig.availability_latest_time]
+  );
+
+  // Fetch location config
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("user_locations")
+      .select("location_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .then(async ({ data: ulData }) => {
+        if (ulData && ulData.length > 0) {
+          const { data: settings } = await supabase
+            .from("location_settings")
+            .select("*")
+            .eq("location_id", ulData[0].location_id)
+            .maybeSingle();
+          if (settings) {
+            setLocationConfig({
+              earliest_shift_start: settings.earliest_shift_start,
+              latest_shift_end: settings.latest_shift_end,
+              availability_earliest_time: (settings as any).availability_earliest_time || "12:00",
+              availability_latest_time: (settings as any).availability_latest_time || "19:00",
+            });
+          }
+        }
+      });
+  }, [user]);
+
+  // Check if template exists
+  useEffect(() => {
+    if (!user) return;
+    (supabase as any)
+      .from("availability_templates")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .then(({ data }: any) => {
+        setHasTemplate(data && data.length > 0);
+      });
+  }, [user]);
+
+  // Fetch availability for current week
   useEffect(() => {
     if (!user) return;
     setLoading(true);
@@ -80,50 +183,91 @@ export default function WorkerAvailability() {
                   preset: existing.preset || "ALL_DAY",
                 };
               }
-              return { day_of_week: d.dow, available: true, start_time: "11:30", end_time: "23:00", preset: "ALL_DAY" };
+              return makeDefaultEntry(d.dow);
             })
           );
         } else {
           setSubmitted(false);
-          setEntries(
-            DAYS.map((d) => ({
-              day_of_week: d.dow,
-              available: true,
-              start_time: "11:30",
-              end_time: "23:00",
-              preset: "ALL_DAY",
-            }))
-          );
+          setEntries(DAYS.map((d) => makeDefaultEntry(d.dow)));
         }
         setLoading(false);
       });
   }, [user, weekStartStr]);
 
+  function makeDefaultEntry(dow: number): AvailabilityEntry {
+    return {
+      day_of_week: dow,
+      available: true,
+      start_time: locationConfig.earliest_shift_start,
+      end_time: locationConfig.latest_shift_end,
+      preset: "ALL_DAY",
+    };
+  }
+
   function selectPreset(index: number, presetValue: string) {
-    const preset = PRESETS.find((p) => p.value === presetValue);
-    if (!preset) return;
+    const times = getPresetTimes(presetValue, locationConfig);
     setEntries((prev) =>
-      prev.map((e, i) =>
-        i === index
-          ? {
-              ...e,
-              preset: presetValue,
-              available: presetValue !== "UNAVAILABLE",
-              start_time: preset.start,
-              end_time: preset.end,
-            }
-          : e
-      )
+      prev.map((e, i) => {
+        if (i !== index) return e;
+        if (presetValue === "CUSTOM") {
+          // When switching to custom, default to first and 7th slot (3hrs apart) if not already custom
+          const defaultStart = customTimeSlots[0] || locationConfig.availability_earliest_time;
+          const defaultEndIdx = Math.min(6, customTimeSlots.length - 1);
+          const defaultEnd = customTimeSlots[defaultEndIdx] || locationConfig.availability_latest_time;
+          return {
+            ...e,
+            preset: "CUSTOM",
+            available: true,
+            start_time: e.preset === "CUSTOM" ? e.start_time : defaultStart,
+            end_time: e.preset === "CUSTOM" ? e.end_time : defaultEnd,
+          };
+        }
+        return {
+          ...e,
+          preset: presetValue,
+          available: presetValue !== "UNAVAILABLE",
+          start_time: times.start,
+          end_time: times.end,
+        };
+      })
     );
+  }
+
+  function setCustomTime(index: number, field: "start_time" | "end_time", value: string) {
+    setEntries((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, [field]: value } : e))
+    );
+  }
+
+  function validateEntries(): string | null {
+    for (const entry of entries) {
+      if (entry.preset === "CUSTOM" && entry.available) {
+        if (!entry.start_time || !entry.end_time) {
+          const day = DAYS.find((d) => d.dow === entry.day_of_week);
+          return `${day?.label}: Please set both start and end times for custom availability.`;
+        }
+        const diff = timeToMinutes(entry.end_time) - timeToMinutes(entry.start_time);
+        if (diff < 180) {
+          const day = DAYS.find((d) => d.dow === entry.day_of_week);
+          const hrs = Math.floor(diff / 60);
+          const mins = diff % 60;
+          return `${day?.label}: Custom availability must be at least 3 hours (${entry.start_time} – ${entry.end_time} is only ${hrs}h${mins > 0 ? ` ${mins}m` : ""}).`;
+        }
+      }
+    }
+    return null;
   }
 
   async function handleSubmit() {
     if (!user) return;
+    const validationError = validateEntries();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     setSaving(true);
     try {
-      // Delete existing for this week
       await supabase.from("availability").delete().eq("user_id", user.id).eq("week_start", weekStartStr);
-      // Insert new
       const rows = entries.map((e) => ({
         user_id: user.id,
         week_start: weekStartStr,
@@ -144,6 +288,57 @@ export default function WorkerAvailability() {
     }
   }
 
+  async function saveTemplate() {
+    if (!user) return;
+    const templateData = entries.map((e) => ({
+      day_of_week: e.day_of_week,
+      available: e.available,
+      start_time: e.start_time,
+      end_time: e.end_time,
+      preset: e.preset,
+    }));
+    try {
+      await (supabase as any).from("availability_templates").delete().eq("user_id", user.id);
+      const { error } = await (supabase as any).from("availability_templates").insert({
+        user_id: user.id,
+        name: "My Template",
+        entries: templateData,
+      });
+      if (error) throw error;
+      setHasTemplate(true);
+      toast.success("Template saved! You can load it for future weeks.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save template");
+    }
+  }
+
+  async function loadTemplate() {
+    if (!user) return;
+    try {
+      const { data, error } = await (supabase as any)
+        .from("availability_templates")
+        .select("entries")
+        .eq("user_id", user.id)
+        .limit(1)
+        .single();
+      if (error || !data) {
+        toast.error("No template found. Save your current availability as a template first.");
+        return;
+      }
+      const templateEntries = (data.entries as any[]).map((e: any) => ({
+        day_of_week: e.day_of_week,
+        available: e.available,
+        start_time: e.start_time,
+        end_time: e.end_time,
+        preset: e.preset,
+      }));
+      setEntries(templateEntries);
+      toast.success("Template loaded! Review and submit when ready.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to load template");
+    }
+  }
+
   const canEdit = !submitted && !isLocked && !isPastWeek;
   const weekLabel = `${format(weekStart, "d MMM")} – ${format(weekEndDate, "d MMM yyyy")}`;
 
@@ -155,7 +350,7 @@ export default function WorkerAvailability() {
       </p>
 
       {/* Week navigation */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, -7))}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -180,11 +375,23 @@ export default function WorkerAvailability() {
         </Button>
       </div>
 
-      {/* Today button */}
-      <div className="flex justify-center mb-4">
+      {/* This Week + Template buttons */}
+      <div className="flex justify-center gap-2 mb-4 flex-wrap">
         <Button variant="outline" size="sm" onClick={() => setWeekStart(getMonWeekStart(new Date()))}>
           This Week
         </Button>
+        {canEdit && (
+          <>
+            <Button variant="outline" size="sm" onClick={saveTemplate}>
+              <Save className="w-3.5 h-3.5 mr-1.5" /> Save Template
+            </Button>
+            {hasTemplate && (
+              <Button variant="outline" size="sm" onClick={loadTemplate}>
+                <Download className="w-3.5 h-3.5 mr-1.5" /> Use Template
+              </Button>
+            )}
+          </>
+        )}
       </div>
 
       {loading ? (
@@ -196,7 +403,6 @@ export default function WorkerAvailability() {
             {entries.map((entry, i) => {
               const dayInfo = DAYS[i];
               const dayDate = addDays(weekStart, i);
-              const isSelectedPreset = (pv: string) => entry.preset === pv;
 
               return (
                 <div key={dayInfo.dow} className="bg-card border border-border rounded-xl p-4">
@@ -206,10 +412,12 @@ export default function WorkerAvailability() {
                       <p className="text-xs text-muted-foreground">{format(dayDate, "dd/MM")}</p>
                     </div>
                     {entry.preset === "UNAVAILABLE" ? (
-                      <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded">Unavailable</span>
+                      <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded">
+                        Unavailable
+                      </span>
                     ) : (
                       <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded">
-                        {entry.start_time} – {entry.end_time}
+                        {formatBadge(entry)}
                       </span>
                     )}
                   </div>
@@ -222,7 +430,7 @@ export default function WorkerAvailability() {
                         onClick={() => canEdit && selectPreset(i, p.value)}
                         disabled={!canEdit}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                          isSelectedPreset(p.value)
+                          entry.preset === p.value
                             ? p.value === "UNAVAILABLE"
                               ? "bg-destructive text-destructive-foreground border-destructive"
                               : "bg-primary text-primary-foreground border-primary"
@@ -233,6 +441,47 @@ export default function WorkerAvailability() {
                       </button>
                     ))}
                   </div>
+
+                  {/* Custom time pickers - only shown when CUSTOM is selected */}
+                  {entry.preset === "CUSTOM" && entry.available && (
+                    <div className="flex items-center gap-3 mt-3">
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                        <Select
+                          value={entry.start_time || ""}
+                          onValueChange={(v) => canEdit && setCustomTime(i, "start_time", v)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="Start" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customTimeSlots.map((slot) => (
+                              <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <span className="text-muted-foreground mt-5">–</span>
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                        <Select
+                          value={entry.end_time || ""}
+                          onValueChange={(v) => canEdit && setCustomTime(i, "end_time", v)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger className="h-9 text-xs">
+                            <SelectValue placeholder="End" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {customTimeSlots.map((slot) => (
+                              <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

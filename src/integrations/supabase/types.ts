@@ -98,10 +98,39 @@ export type Database = {
         }
         Relationships: []
       }
+      availability_templates: {
+        Row: {
+          created_at: string
+          entries: Json
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entries?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entries?: Json
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       location_settings: {
         Row: {
           availability_deadline_day: number
           availability_deadline_time: string
+          availability_earliest_time: string
+          availability_latest_time: string
           breaks_enabled: boolean
           created_at: string
           earliest_shift_start: string
@@ -115,6 +144,8 @@ export type Database = {
         Insert: {
           availability_deadline_day?: number
           availability_deadline_time?: string
+          availability_earliest_time?: string
+          availability_latest_time?: string
           breaks_enabled?: boolean
           created_at?: string
           earliest_shift_start?: string
@@ -128,6 +159,8 @@ export type Database = {
         Update: {
           availability_deadline_day?: number
           availability_deadline_time?: string
+          availability_earliest_time?: string
+          availability_latest_time?: string
           breaks_enabled?: boolean
           created_at?: string
           earliest_shift_start?: string

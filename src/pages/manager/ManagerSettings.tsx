@@ -65,11 +65,17 @@ export default function ManagerSettings() {
   async function handleSave() {
     if (!settings) return;
     const { id, ...data } = settings;
+    // Include the availability time range fields
+    const saveData = {
+      ...data,
+      availability_earliest_time: (settings as any).availability_earliest_time || "12:00",
+      availability_latest_time: (settings as any).availability_latest_time || "19:00",
+    };
     if (id) {
-      const { error } = await supabase.from("location_settings").update(data).eq("id", id);
+      const { error } = await supabase.from("location_settings").update(saveData as any).eq("id", id);
       if (error) { toast.error(error.message); return; }
     } else {
-      const { error } = await supabase.from("location_settings").insert(data);
+      const { error } = await supabase.from("location_settings").insert(saveData as any);
       if (error) { toast.error(error.message); return; }
     }
     toast.success("Settings saved");
@@ -95,6 +101,7 @@ export default function ManagerSettings() {
         </div>
 
         <div className="stat-card space-y-4">
+          <h2 className="font-semibold text-foreground">Shift Settings</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Time Increment (mins)</Label>
@@ -137,9 +144,36 @@ export default function ManagerSettings() {
             />
             <Label>Breaks Enabled</Label>
           </div>
-
-          <Button onClick={handleSave}>Save Settings</Button>
         </div>
+
+        <div className="stat-card space-y-4">
+          <h2 className="font-semibold text-foreground">Worker Availability Settings</h2>
+          <p className="text-xs text-muted-foreground">
+            Configure the time range workers can choose from when setting custom availability (30-min intervals).
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Custom Earliest Time</Label>
+              <Input
+                type="time"
+                value={(settings as any).availability_earliest_time || "12:00"}
+                onChange={(e) => setSettings({ ...settings, availability_earliest_time: e.target.value } as any)}
+                step="1800"
+              />
+            </div>
+            <div>
+              <Label>Custom Latest Time</Label>
+              <Input
+                type="time"
+                value={(settings as any).availability_latest_time || "19:00"}
+                onChange={(e) => setSettings({ ...settings, availability_latest_time: e.target.value } as any)}
+                step="1800"
+              />
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={handleSave}>Save Settings</Button>
       </div>
     </AppLayout>
   );
