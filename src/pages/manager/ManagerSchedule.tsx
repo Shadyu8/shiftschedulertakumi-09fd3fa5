@@ -605,31 +605,51 @@ export default function ManagerSchedule() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            {/* Day selector tabs */}
-            <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
-              {days.map((day, i) => {
-                const label = day.toLocaleDateString("en-GB", { weekday: "short" });
-                const num = day.getDate();
-                const isSelected = i === selectedDayIndex;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => { setSelectedDayIndex(i); setExpandedWorkers(new Set()); }}
-                    className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
-                  >
-                    <span>{label}</span>
-                    <span className="text-sm font-bold">{num}</span>
-                  </button>
-                );
-              })}
+            {/* View mode toggle */}
+            <div className="flex items-center gap-1 px-1 mb-2">
+              <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 bg-muted flex-1">
+                <button
+                  onClick={() => setViewMode("card")}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "card" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 inline mr-1" /> Card
+                </button>
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "table" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                >
+                  <TableIcon className="w-3.5 h-3.5 inline mr-1" /> Spreadsheet
+                </button>
+              </div>
             </div>
+            {/* Day selector tabs — only in card view */}
+            {viewMode === "card" && (
+              <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
+                {days.map((day, i) => {
+                  const label = day.toLocaleDateString("en-GB", { weekday: "short" });
+                  const num = day.getDate();
+                  const isSelected = i === selectedDayIndex;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => { setSelectedDayIndex(i); setExpandedWorkers(new Set()); }}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-sm font-bold">{num}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
       </div>
 
       {locationId && (
         <>
-          {/* ── Mobile day view ── */}
+          {/* ── Mobile day view (card only) ── */}
+          {viewMode === "card" && (
           <div className="md:hidden space-y-2 pb-24">
             {selectedAvailableWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAvailableWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
               <p className="text-sm text-muted-foreground text-center mt-6">No availability submitted for this day</p>
@@ -692,15 +712,48 @@ export default function ManagerSchedule() {
                 </div>
               );
             })}
+            {/* Workers with shifts but no availability for this day */}
+            {selectedDayShifts
+              .filter((s) => !selectedAvailableWorkers.find((ua) => ua.userId === s.user_id))
+              .map((s) => {
+                const isExpanded = expandedWorkers.has(s.user_id);
+                const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                return (
+                  <div key={s.id} className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+                    <button className="w-full flex items-center justify-between px-4 py-3 text-left" onClick={() => toggleWorkerExpand(s.user_id)}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-foreground text-sm truncate">{s.profile?.full_name ?? "Unknown"}</span>
+                        <span className="text-xs bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-semibold shrink-0">1</span>
+                      </div>
+                      <span className="text-muted-foreground text-sm ml-2">{isExpanded ? "▲" : "▼"}</span>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
+                        <div className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                          <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
+                          <div className="flex items-center gap-1">
+                            <TimeSelect value={edit.startTime} onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, startTime: v } })); saveShiftTime(s.id, { startTime: v, endTime: edit.endTime }); }} />
+                            <span className="text-muted-foreground text-sm shrink-0">–</span>
+                            <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
+          )}
 
-          {/* ── Mobile FAB ── */}
-          <button
-            className="md:hidden fixed bottom-20 right-6 z-30 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-full shadow-lg px-5 py-3 flex items-center gap-2"
-            onClick={() => { setAddWorkerModal({ date: selectedDateStr }); setAddWorkerSearch(""); }}
-          >
-            <Plus className="w-4 h-4" /> Add worker
-          </button>
+          {/* ── Mobile FAB (card view only) ── */}
+          {viewMode === "card" && (
+            <button
+              className="md:hidden fixed bottom-20 right-6 z-30 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-full shadow-lg px-5 py-3 flex items-center gap-2"
+              onClick={() => { setAddWorkerModal({ date: selectedDateStr }); setAddWorkerSearch(""); }}
+            >
+              <Plus className="w-4 h-4" /> Add worker
+            </button>
+          )}
 
           {/* ── Desktop Card view ── */}
           <div className={`hidden md:grid grid-cols-7 gap-2 pb-4 ${viewMode !== "card" ? "!hidden" : ""}`}>
@@ -815,8 +868,8 @@ export default function ManagerSchedule() {
             <span className="hidden md:flex items-center gap-1">Drag shift cards to move between days/workers. Drag ⠿ to reorder rows.</span>
           </div>
 
-          {/* ── Desktop Spreadsheet (table) view ── */}
-          <div className={`hidden md:block overflow-x-auto rounded-xl border border-border shadow-sm ${viewMode !== "table" ? "!hidden" : ""}`}>
+          {/* ── Spreadsheet (table) view ── */}
+          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${viewMode !== "table" ? "hidden" : ""}`}>
             <table className="border-collapse w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="bg-muted border-b border-border">
@@ -1024,7 +1077,9 @@ export default function ManagerSchedule() {
           </DialogHeader>
           {addWorkerModal && (
             <div>
-              <p className="text-sm text-muted-foreground mb-3">{addWorkerModal.date}</p>
+              <p className="text-sm text-muted-foreground mb-3">
+                {format(new Date(addWorkerModal.date + "T12:00:00"), "EEEE, d MMM yyyy")}
+              </p>
               <Input
                 placeholder="Search worker..."
                 value={addWorkerSearch}
