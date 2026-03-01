@@ -25,6 +25,7 @@ export default function ManagerDashboard() {
 
   const links = [
     { href: "/manager/users", label: "👥 Workers" },
+    { href: "/manager/approvals", label: "✅ Punch Approvals" },
     { href: "/manager/schedule", label: "📅 Schedule Builder" },
     { href: "/manager/exports", label: "📊 Exports" },
     { href: "/manager/settings", label: "⚙️ Settings" },

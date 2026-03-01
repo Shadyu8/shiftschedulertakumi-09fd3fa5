@@ -20,6 +20,7 @@ import ManagerUsers from "./pages/manager/ManagerUsers";
 import ManagerSchedule from "./pages/manager/ManagerSchedule";
 import ManagerExports from "./pages/manager/ManagerExports";
 import ManagerSettings from "./pages/manager/ManagerSettings";
+import ManagerPunchApprovals from "./pages/manager/ManagerPunchApprovals";
 
 import WorkerDashboard from "./pages/worker/WorkerDashboard";
 import WorkerSchedule from "./pages/worker/WorkerSchedule";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/manager/schedule" element={<ProtectedRoute allowedRoles={["manager"]}><ManagerSchedule /></ProtectedRoute>} />
             <Route path="/manager/exports" element={<ProtectedRoute allowedRoles={["manager"]}><ManagerExports /></ProtectedRoute>} />
             <Route path="/manager/settings" element={<ProtectedRoute allowedRoles={["manager"]}><ManagerSettings /></ProtectedRoute>} />
+            <Route path="/manager/approvals" element={<ProtectedRoute allowedRoles={["manager"]}><ManagerPunchApprovals /></ProtectedRoute>} />
 
             {/* Worker routes */}
             <Route path="/worker" element={<ProtectedRoute allowedRoles={["worker", "shiftleader"]}><WorkerDashboard /></ProtectedRoute>} />
