@@ -2,61 +2,65 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Users, Calendar, Clock, ClipboardList,
-  Settings, LogOut, Monitor, FileText, Shield, Building2,
-  MapPin, UserCog, Menu, X, User
+  Settings, LogOut, Monitor, FileText, Building2,
+  MapPin, UserCog, User
 } from "lucide-react";
-import { useState } from "react";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  mobileLabel?: string;
 }
 
 const roleNavItems: Record<string, NavItem[]> = {
   admin: [
-    { href: "/admin", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: "/admin/organizations", label: "Organizations", icon: <Building2 className="w-5 h-5" /> },
-    { href: "/admin/locations", label: "Locations", icon: <MapPin className="w-5 h-5" /> },
-    { href: "/admin/managers", label: "Managers", icon: <UserCog className="w-5 h-5" /> },
+    { href: "/admin", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: "/admin/organizations", label: "Organizations", mobileLabel: "Orgs", icon: <Building2 className="w-5 h-5" /> },
+    { href: "/admin/locations", label: "Locations", mobileLabel: "Locs", icon: <MapPin className="w-5 h-5" /> },
+    { href: "/admin/managers", label: "Managers", mobileLabel: "Mgrs", icon: <UserCog className="w-5 h-5" /> },
   ],
   manager: [
-    { href: "/manager", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: "/manager", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
     { href: "/manager/users", label: "Workers", icon: <Users className="w-5 h-5" /> },
-    { href: "/manager/schedule", label: "Schedule Builder", icon: <Calendar className="w-5 h-5" /> },
+    { href: "/manager/schedule", label: "Schedule Builder", mobileLabel: "Builder", icon: <Calendar className="w-5 h-5" /> },
     { href: "/manager/exports", label: "Exports", icon: <FileText className="w-5 h-5" /> },
     { href: "/manager/settings", label: "Settings", icon: <Settings className="w-5 h-5" /> },
-    { href: "/shiftschedule", label: "Shift Schedule", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/shiftschedule", label: "Shift Schedule", mobileLabel: "Schedule", icon: <ClipboardList className="w-5 h-5" /> },
   ],
   shiftleader: [
-    { href: "/shiftleader", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: "/shiftleader", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
     { href: "/kiosk", label: "Kiosk", icon: <Monitor className="w-5 h-5" /> },
-    { href: "/worker/schedule", label: "My Schedule", icon: <Calendar className="w-5 h-5" /> },
-    { href: "/worker/punches", label: "My Punches", icon: <Clock className="w-5 h-5" /> },
-    { href: "/worker/availability", label: "Availability", icon: <ClipboardList className="w-5 h-5" /> },
-    { href: "/shiftschedule", label: "Shift Schedule", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/worker/schedule", label: "My Schedule", mobileLabel: "Schedule", icon: <Calendar className="w-5 h-5" /> },
+    { href: "/worker/punches", label: "My Punches", mobileLabel: "Punches", icon: <Clock className="w-5 h-5" /> },
+    { href: "/worker/availability", label: "Availability", mobileLabel: "Avail", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/shiftschedule", label: "Shift Schedule", mobileLabel: "Shifts", icon: <ClipboardList className="w-5 h-5" /> },
   ],
   worker: [
-    { href: "/worker", label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: "/worker/schedule", label: "My Schedule", icon: <Calendar className="w-5 h-5" /> },
-    { href: "/worker/punches", label: "My Punches", icon: <Clock className="w-5 h-5" /> },
-    { href: "/worker/availability", label: "Availability", icon: <ClipboardList className="w-5 h-5" /> },
-    { href: "/shiftschedule", label: "Shift Schedule", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/worker", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: "/worker/schedule", label: "My Schedule", mobileLabel: "Schedule", icon: <Calendar className="w-5 h-5" /> },
+    { href: "/worker/punches", label: "My Punches", mobileLabel: "Punches", icon: <Clock className="w-5 h-5" /> },
+    { href: "/worker/availability", label: "Availability", mobileLabel: "Avail", icon: <ClipboardList className="w-5 h-5" /> },
+    { href: "/shiftschedule", label: "Shift Schedule", mobileLabel: "Shifts", icon: <ClipboardList className="w-5 h-5" /> },
   ],
 };
 
 export default function AppNavigation() {
   const { profile, role, signOut } = useAuth();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (!role) return null;
 
   const navItems = roleNavItems[role] || [];
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + "/");
 
-  // Mobile bottom nav - show first 4 items
-  const mobileBottomItems = navItems.slice(0, 4);
+  // Mobile bottom: show up to 5 items (first 4 nav + account)
+  const mobileItems = [
+    ...navItems.slice(0, 4),
+    { href: "/account", label: "Account", mobileLabel: "Account", icon: <User className="w-5 h-5" /> },
+  ];
+
+  const profilePic = profile?.profile_picture;
 
   return (
     <>
@@ -89,13 +93,17 @@ export default function AppNavigation() {
           ))}
         </nav>
 
-        {/* User section */}
+        {/* User section with profile picture */}
         <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
           <Link
             to="/account"
             className={`nav-link ${isActive("/account") ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
           >
-            <User className="w-5 h-5" />
+            {profilePic ? (
+              <img src={profilePic} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+            ) : (
+              <User className="w-5 h-5" />
+            )}
             <span className="truncate">{profile?.full_name || "Account"}</span>
           </Link>
           <button
@@ -108,62 +116,22 @@ export default function AppNavigation() {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Calendar className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="font-bold text-foreground">Shift Planner</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link to="/account" className="p-2 rounded-lg hover:bg-accent">
-            <User className="w-5 h-5 text-muted-foreground" />
-          </Link>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 rounded-lg hover:bg-accent">
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile dropdown menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden fixed top-14 left-0 right-0 z-20 bg-card border-b border-border shadow-lg animate-fade-in">
-          <nav className="px-4 py-3 space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`nav-link ${isActive(item.href) ? "nav-link-active" : "nav-link-inactive"}`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </Link>
-            ))}
-            <button
-              onClick={() => { signOut(); setMobileMenuOpen(false); }}
-              className="nav-link nav-link-inactive w-full"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Sign Out</span>
-            </button>
-          </nav>
-        </div>
-      )}
-
-      {/* Mobile bottom navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-2 py-1 flex justify-around">
-        {mobileBottomItems.map((item) => (
+      {/* Mobile bottom navigation only — no top bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 py-1 flex justify-around">
+        {mobileItems.map((item) => (
           <Link
             key={item.href}
             to={item.href}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 ${
               isActive(item.href) ? "text-primary" : "text-muted-foreground"
             }`}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            {item.href === "/account" && profilePic ? (
+              <img src={profilePic} alt="" className="w-5 h-5 rounded-full object-cover" />
+            ) : (
+              item.icon
+            )}
+            <span className="truncate">{item.mobileLabel || item.label}</span>
           </Link>
         ))}
       </nav>
