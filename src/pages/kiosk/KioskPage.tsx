@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
@@ -52,6 +52,12 @@ export default function KioskPage() {
   const [exitError, setExitError] = useState("");
 
   const today = new Date().toISOString().slice(0, 10);
+
+  // Rate limiting for PIN attempts
+  const failedAttempts = useRef(0);
+  const lockoutUntil = useRef(0);
+  const MAX_ATTEMPTS = 5;
+  const LOCKOUT_MS = 60_000; // 1 minute lockout
 
   // Fetch locations for manager
   useEffect(() => {
@@ -163,6 +169,14 @@ export default function KioskPage() {
   }
 
   const lookupWorker = useCallback(async (uniqueKey: string) => {
+    // Rate limiting check
+    const now = Date.now();
+    if (now < lockoutUntil.current) {
+      const secsLeft = Math.ceil((lockoutUntil.current - now) / 1000);
+      setFeedback({ type: "error", message: `Too many attempts. Try again in ${secsLeft}s` });
+      return;
+    }
+
     setLookupLoading(true);
     setFeedback(null);
     setWorkerInfo(null);
@@ -174,10 +188,22 @@ export default function KioskPage() {
       .single();
 
     if (error || !profileData) {
-      setFeedback({ type: "error", message: "Worker not found" });
+      failedAttempts.current += 1;
+      if (failedAttempts.current >= MAX_ATTEMPTS) {
+        lockoutUntil.current = Date.now() + LOCKOUT_MS;
+        failedAttempts.current = 0;
+        setFeedback({ type: "error", message: "Too many failed attempts. Please wait." });
+      } else {
+        // Delay response to slow brute-force
+        await new Promise((r) => setTimeout(r, 1500));
+        setFeedback({ type: "error", message: "Invalid PIN" });
+      }
       setLookupLoading(false);
       return;
     }
+
+    // Reset on success
+    failedAttempts.current = 0;
 
     // Fetch today's shift and active punch in parallel
     const [punchRes, shiftRes] = await Promise.all([
