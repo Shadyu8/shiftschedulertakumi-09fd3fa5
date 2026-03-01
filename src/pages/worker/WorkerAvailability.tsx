@@ -9,13 +9,13 @@ import { format, startOfWeek, addDays, isBefore, isToday, startOfDay } from "dat
 import { ChevronLeft, ChevronRight, Lock, Send, Save, Download } from "lucide-react";
 
 const DAYS = [
-  { dow: 1, label: "Monday" },
-  { dow: 2, label: "Tuesday" },
-  { dow: 3, label: "Wednesday" },
-  { dow: 4, label: "Thursday" },
-  { dow: 5, label: "Friday" },
-  { dow: 6, label: "Saturday" },
-  { dow: 7, label: "Sunday" },
+  { dow: 0, label: "Monday" },
+  { dow: 1, label: "Tuesday" },
+  { dow: 2, label: "Wednesday" },
+  { dow: 3, label: "Thursday" },
+  { dow: 4, label: "Friday" },
+  { dow: 5, label: "Saturday" },
+  { dow: 6, label: "Sunday" },
 ];
 
 const PRESETS = [
