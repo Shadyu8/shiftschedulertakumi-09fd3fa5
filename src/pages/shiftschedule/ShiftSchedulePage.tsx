@@ -5,6 +5,8 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { format, addDays, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -37,6 +39,7 @@ export default function ShiftSchedulePage() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
 
   // Swipe support
   const touchStartX = useRef<number | null>(null);
@@ -74,7 +77,7 @@ export default function ShiftSchedulePage() {
     }
   }, [selectedLoc]);
 
-  // Fetch locations — managers/admins see org locations, others see assigned locations
+  // Fetch locations
   useEffect(() => {
     if (!user) return;
 
@@ -99,7 +102,6 @@ export default function ShiftSchedulePage() {
       const uniqueLocs = Array.from(new Map(locs.map((l) => [l.id, l])).values());
       setLocations(uniqueLocs);
 
-      // Auto-select: saved valid location > first available location
       const saved = localStorage.getItem("shiftschedule_selected_location");
       const resolvedSelection =
         saved && uniqueLocs.some((l) => l.id === saved)
@@ -179,9 +181,10 @@ export default function ShiftSchedulePage() {
 
   function renderShiftCard(s: Shift) {
     return (
-      <div
+      <button
         key={s.id}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
+        onClick={() => setSelectedShift(s)}
+        className={`flex items-center gap-4 px-4 py-4 rounded-xl border w-full text-left transition-colors active:scale-[0.98] ${
           s.user_id === user?.id
             ? "bg-primary/10 border-primary/20"
             : "bg-muted/50 border-border"
@@ -191,25 +194,27 @@ export default function ShiftSchedulePage() {
           <img
             src={s.profile_picture}
             alt={s.profile_name || ""}
-            className="w-8 h-8 rounded-full object-cover border border-border shrink-0"
+            className="w-11 h-11 rounded-full object-cover border border-border shrink-0"
           />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0 select-none">
+          <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold shrink-0 select-none">
             {(s.profile_name || "?").charAt(0).toUpperCase()}
           </div>
         )}
-        <span className="text-primary font-medium text-sm w-28 shrink-0">
-          {s.start_time}{s.end_time ? ` – ${s.end_time}` : ""}
-        </span>
-        <span className="text-foreground text-sm font-medium">
-          {s.profile_name || "Unknown"}
-        </span>
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="text-foreground text-base font-semibold truncate">
+            {s.profile_name || "Unknown"}
+          </span>
+          <span className="text-muted-foreground text-sm">
+            {s.start_time}{s.end_time ? ` – ${s.end_time}` : ""}
+          </span>
+        </div>
         {s.standby && (
-          <span className="bg-warning/10 text-warning text-xs px-2 py-0.5 rounded-full ml-auto">
+          <span className="bg-warning/10 text-warning text-xs px-2.5 py-1 rounded-full font-medium shrink-0">
             Standby
           </span>
         )}
-      </div>
+      </button>
     );
   }
 
@@ -243,9 +248,10 @@ export default function ShiftSchedulePage() {
               ) : (
                 <div className="space-y-1.5">
                   {dayS.map((s) => (
-                    <div
+                    <button
                       key={s.id}
-                      className={`px-2 py-1.5 rounded-md text-xs border ${
+                      onClick={() => setSelectedShift(s)}
+                      className={`w-full text-left px-2 py-2 rounded-lg text-xs border transition-colors active:scale-[0.98] ${
                         s.user_id === user?.id
                           ? "bg-primary/10 border-primary/20"
                           : "bg-muted/50 border-border"
@@ -258,7 +264,7 @@ export default function ShiftSchedulePage() {
                         {s.profile_name || "Unknown"}
                         {s.standby && <span className="text-warning ml-1">(S)</span>}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -310,7 +316,7 @@ export default function ShiftSchedulePage() {
           </Button>
         </div>
 
-        {/* Week day strip — tap to select day */}
+        {/* Week day strip */}
         {viewMode === "day" && (
           <div className="flex justify-between border-b border-border pb-2">
             {weekDays.map((day) => {
@@ -360,7 +366,7 @@ export default function ShiftSchedulePage() {
               {dayShifts.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No shifts scheduled for this day.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {dayShifts.map(renderShiftCard)}
                 </div>
               )}
@@ -370,6 +376,43 @@ export default function ShiftSchedulePage() {
           )}
         </div>
       )}
+
+      {/* Worker detail popup */}
+      <Dialog open={!!selectedShift} onOpenChange={(o) => !o && setSelectedShift(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Worker Details</DialogTitle>
+          </DialogHeader>
+          {selectedShift && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <Avatar className="w-20 h-20">
+                {selectedShift.profile_picture ? (
+                  <AvatarImage src={selectedShift.profile_picture} alt={selectedShift.profile_name || ""} />
+                ) : null}
+                <AvatarFallback className="text-2xl font-bold bg-primary/20 text-primary">
+                  {(selectedShift.profile_name || "?").charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="text-center">
+                <p className="text-lg font-bold text-foreground">{selectedShift.profile_name || "Unknown"}</p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {format(new Date(selectedShift.date + "T00:00:00"), "EEE, dd MMM yyyy")}
+                </p>
+              </div>
+              <div className="bg-muted/50 rounded-xl px-6 py-3 text-center">
+                <p className="text-2xl font-bold text-primary">
+                  {selectedShift.start_time} – {selectedShift.end_time}
+                </p>
+              </div>
+              {selectedShift.standby && (
+                <span className="bg-warning/10 text-warning text-sm px-4 py-1.5 rounded-full font-medium">
+                  Standby
+                </span>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
