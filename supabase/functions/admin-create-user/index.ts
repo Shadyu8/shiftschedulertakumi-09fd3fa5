@@ -163,7 +163,7 @@ serve(async (req) => {
       }
 
       // Update password if provided
-      if (body.password) {
+      if (body.password && typeof body.password === "string" && body.password.trim().length > 0) {
         if (typeof body.password !== "string" || body.password.length < 8 || body.password.length > 128) {
           return new Response(JSON.stringify({ error: "Password must be 8-128 characters" }), {
             status: 400,

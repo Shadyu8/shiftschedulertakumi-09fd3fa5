@@ -222,30 +222,29 @@ export default function ManagerSchedule() {
     if (!locationId || !profile?.organization_id) return;
     supabase
       .from("user_locations")
-      .select("user_id, profiles:user_id(user_id, full_name)")
+      .select("user_id")
       .eq("location_id", locationId)
-      .then(async ({ data }) => {
-        if (data) {
-          const allUsers: Worker[] = (data as any[])
-            .map((d) => d.profiles)
-            .filter(Boolean)
-            .map((p: any) => ({ user_id: p.user_id, full_name: p.full_name }));
-          const unique = Array.from(new Map(allUsers.map((x) => [x.user_id, x])).values());
-          const userIds = unique.map((u) => u.user_id);
-          if (userIds.length === 0) { setWorkers([]); return; }
-          const { data: roles } = await supabase
-            .from("user_roles")
-            .select("user_id, role")
-            .in("user_id", userIds);
-          const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
-          const filtered = unique
-            .filter((u) => {
-              const r = roleMap.get(u.user_id);
-              return r === "worker" || r === "shiftleader";
-            })
-            .map((u) => ({ ...u, role: roleMap.get(u.user_id) }));
-          setWorkers(filtered);
-        }
+      .then(async ({ data: ulData }) => {
+        if (!ulData || ulData.length === 0) { setWorkers([]); return; }
+        const userIds = [...new Set(ulData.map((d: any) => d.user_id))];
+        // Fetch profiles and roles in parallel
+        const [profilesRes, rolesRes] = await Promise.all([
+          supabase.from("profiles").select("user_id, full_name").in("user_id", userIds),
+          supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
+        ]);
+        const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.user_id, p.full_name]));
+        const roleMap = new Map((rolesRes.data || []).map((r: any) => [r.user_id, r.role]));
+        const filtered: Worker[] = userIds
+          .filter((uid) => {
+            const r = roleMap.get(uid);
+            return r === "worker" || r === "shiftleader";
+          })
+          .map((uid) => ({
+            user_id: uid,
+            full_name: profileMap.get(uid) ?? "Unknown",
+            role: roleMap.get(uid),
+          }));
+        setWorkers(filtered);
       });
   }, [locationId, profile]);
 
