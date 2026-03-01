@@ -27,6 +27,7 @@ interface WorkerInfo {
   profile_picture: string | null;
   activePunch?: { id: string; punch_in: string } | null;
   todayShift?: ShiftInfo | null;
+  shiftCompleted?: boolean;
 }
 
 type KioskState = "setup" | "active";
@@ -224,8 +225,8 @@ export default function KioskPage() {
     // Reset on success
     failedAttempts.current = 0;
 
-    // Fetch today's shift and active punch in parallel
-    const [punchRes, shiftRes] = await Promise.all([
+    // Fetch today's shift, active punch, and completed punches in parallel
+    const [punchRes, shiftRes, completedRes] = await Promise.all([
       supabase
         .from("time_punches")
         .select("id, punch_in")
@@ -241,12 +242,22 @@ export default function KioskPage() {
         .eq("location_id", selectedLoc)
         .eq("date", today)
         .maybeSingle(),
+      supabase
+        .from("time_punches")
+        .select("id")
+        .eq("user_id", profileData.user_id)
+        .eq("location_id", selectedLoc)
+        .eq("date", today)
+        .not("punch_out", "is", null),
     ]);
+
+    const hasCompletedPunch = (completedRes.data?.length || 0) > 0;
 
     setWorkerInfo({
       ...profileData,
       activePunch: punchRes.data || null,
       todayShift: shiftRes.data || null,
+      shiftCompleted: hasCompletedPunch && !punchRes.data,
     });
     setLookupLoading(false);
   }, [selectedLoc, today]);
@@ -416,23 +427,33 @@ export default function KioskPage() {
               </div>
             )}
             <p className="text-xl font-bold text-foreground mb-1">{workerInfo.full_name}</p>
-            {workerInfo.todayShift ? (
+            {workerInfo.shiftCompleted ? (
+              <div className="bg-muted rounded-lg px-4 py-2 mb-3">
+                <p className="text-sm font-medium text-muted-foreground">Shift already completed today ✓</p>
+              </div>
+            ) : workerInfo.todayShift ? (
               <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-2 mb-3">
                 <p className="text-sm font-medium text-primary">Today's shift</p>
                 <p className="text-lg font-bold text-foreground">{workerInfo.todayShift.start_time} – {workerInfo.todayShift.end_time}</p>
               </div>
             ) : (
               <div className="bg-muted rounded-lg px-4 py-2 mb-3">
-                <p className="text-sm font-medium text-muted-foreground">Not working today</p>
+                <p className="text-sm font-medium text-muted-foreground">No shift scheduled today</p>
               </div>
             )}
-            {workerInfo.activePunch ? (
+            {workerInfo.shiftCompleted ? (
+              <p className="text-sm text-muted-foreground mb-4">No further action needed</p>
+            ) : workerInfo.activePunch ? (
               <p className="text-sm text-muted-foreground mb-4">Clocked in since {workerInfo.activePunch.punch_in}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground mb-4">{workerInfo.todayShift ? "Not clocked in yet" : "Not clocked in"}</p>
-            )}
+            ) : workerInfo.todayShift ? (
+              <p className="text-sm text-muted-foreground mb-4">Not clocked in yet</p>
+            ) : null}
             <div className="flex gap-3">
-              {workerInfo.activePunch ? (
+              {workerInfo.shiftCompleted || !workerInfo.todayShift ? (
+                <Button variant="outline" size="lg" className="flex-1" onClick={handleClear}>
+                  OK
+                </Button>
+              ) : workerInfo.activePunch ? (
                 <Button
                   className="flex-1"
                   variant="destructive"
@@ -452,9 +473,11 @@ export default function KioskPage() {
                   {actionLoading ? "..." : "Clock In"}
                 </Button>
               )}
-              <Button variant="outline" size="lg" onClick={handleClear}>
-                Cancel
-              </Button>
+              {!workerInfo.shiftCompleted && workerInfo.todayShift && (
+                <Button variant="outline" size="lg" onClick={handleClear}>
+                  Cancel
+                </Button>
+              )}
             </div>
           </div>
         )}
