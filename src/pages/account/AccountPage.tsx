@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { User } from "lucide-react";
+import { User, Camera, Loader2 } from "lucide-react";
 
 export default function AccountPage() {
   const { profile, user, signOut } = useAuth();
@@ -16,6 +16,56 @@ export default function AccountPage() {
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [profilePicUrl, setProfilePicUrl] = useState(profile?.profile_picture || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadPicture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5MB");
+      return;
+    }
+
+    setUploadingPicture(true);
+    const ext = file.name.split(".").pop();
+    const filePath = `${user.id}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("profile-pictures")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      toast.error(uploadError.message);
+      setUploadingPicture(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("profile-pictures")
+      .getPublicUrl(filePath);
+
+    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ profile_picture: publicUrl })
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      toast.error(updateError.message);
+    } else {
+      setProfilePicUrl(publicUrl);
+      toast.success("Profile picture updated");
+    }
+    setUploadingPicture(false);
+  }
 
   async function handleSave() {
     if (!user) return;
@@ -47,8 +97,36 @@ export default function AccountPage() {
         {/* Profile section */}
         <div className="stat-card space-y-4">
           <div className="flex items-center gap-4 mb-2">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="w-8 h-8 text-primary" />
+            <div className="relative group">
+              {profilePicUrl ? (
+                <img
+                  src={profilePicUrl}
+                  alt={profile?.full_name || "Profile"}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="w-8 h-8 text-primary" />
+                </div>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPicture}
+                className="absolute inset-0 rounded-full bg-foreground/0 group-hover:bg-foreground/40 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                {uploadingPicture ? (
+                  <Loader2 className="w-5 h-5 text-primary-foreground animate-spin" />
+                ) : (
+                  <Camera className="w-5 h-5 text-primary-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadPicture}
+              />
             </div>
             <div>
               <p className="font-semibold text-foreground text-lg">{profile?.full_name}</p>
