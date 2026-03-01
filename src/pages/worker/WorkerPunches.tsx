@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 
 interface Punch {
@@ -10,6 +11,7 @@ interface Punch {
   punch_in: string;
   punch_out: string | null;
   notes: string | null;
+  approved: boolean | null;
   locations?: { name: string };
 }
 
@@ -38,6 +40,19 @@ export default function WorkerPunches() {
       });
   }, [user]);
 
+  function getStatusBadge(punch: Punch) {
+    if (punch.punch_out === null) {
+      return <Badge className="bg-primary/10 text-primary border-0">Active</Badge>;
+    }
+    if (punch.approved === true) {
+      return <Badge className="bg-primary/10 text-primary border-0">Approved</Badge>;
+    }
+    if (punch.approved === false) {
+      return <Badge variant="destructive">Rejected</Badge>;
+    }
+    return <Badge variant="outline" className="text-muted-foreground">Pending</Badge>;
+  }
+
   return (
     <AppLayout>
       <h1 className="page-header mb-6">🕒 My Punches</h1>
@@ -49,11 +64,14 @@ export default function WorkerPunches() {
               <p className="font-medium text-foreground">{format(new Date(p.date), "EEEE dd/MM/yyyy")}</p>
               <p className="text-sm text-muted-foreground">{p.locations?.name}</p>
             </div>
-            <div className="text-right">
-              <p className="font-mono text-sm text-foreground">
-                {p.punch_in} → {p.punch_out || <span className="text-success font-medium">Active</span>}
-              </p>
-              {p.notes && <p className="text-xs text-muted-foreground">{p.notes}</p>}
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="font-mono text-sm text-foreground">
+                  {p.punch_in} → {p.punch_out || "—"}
+                </p>
+                {p.notes && <p className="text-xs text-muted-foreground">{p.notes}</p>}
+              </div>
+              {getStatusBadge(p)}
             </div>
           </div>
         ))}

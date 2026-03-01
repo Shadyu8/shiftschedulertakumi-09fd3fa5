@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Users, Calendar, Clock, ClipboardList,
   Settings, LogOut, Monitor, FileText, Building2,
-  MapPin, UserCog, User
+  MapPin, UserCog, User, CheckSquare
 } from "lucide-react";
 
 interface NavItem {
@@ -23,6 +23,7 @@ const roleNavItems: Record<string, NavItem[]> = {
   manager: [
     { href: "/manager", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
     { href: "/manager/users", label: "Workers", icon: <Users className="w-5 h-5" /> },
+    { href: "/manager/approvals", label: "Approvals", icon: <CheckSquare className="w-5 h-5" /> },
     { href: "/manager/schedule", label: "Schedule Builder", mobileLabel: "Builder", icon: <Calendar className="w-5 h-5" /> },
     { href: "/manager/exports", label: "Exports", icon: <FileText className="w-5 h-5" /> },
     { href: "/manager/settings", label: "Settings", icon: <Settings className="w-5 h-5" /> },
