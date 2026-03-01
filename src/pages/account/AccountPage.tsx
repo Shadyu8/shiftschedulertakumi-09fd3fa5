@@ -11,7 +11,6 @@ import { User, Camera, Loader2 } from "lucide-react";
 export default function AccountPage() {
   const { profile, user, signOut } = useAuth();
   const [fullName, setFullName] = useState(profile?.full_name || "");
-  const [uniqueKey, setUniqueKey] = useState(profile?.unique_key || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -72,7 +71,6 @@ export default function AccountPage() {
     setSaving(true);
     const { error } = await supabase.from("profiles").update({
       full_name: fullName,
-      unique_key: uniqueKey || null,
     }).eq("user_id", user.id);
     if (error) { toast.error(error.message); setSaving(false); return; }
     toast.success("Profile updated");
@@ -134,14 +132,21 @@ export default function AccountPage() {
             </div>
           </div>
 
+          {/* Kiosk PIN */}
+          {profile?.unique_key && (
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3">
+              <div className="flex-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kiosk PIN</p>
+                <p className="text-2xl font-mono font-bold tracking-[0.3em] text-foreground">{profile.unique_key}</p>
+              </div>
+              <p className="text-xs text-muted-foreground max-w-[140px] text-right">Use this code to clock in/out at the kiosk tablet</p>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div>
               <Label>Full Name</Label>
               <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-            </div>
-            <div>
-              <Label>Unique Key</Label>
-              <Input value={uniqueKey} onChange={(e) => setUniqueKey(e.target.value)} placeholder="e.g. employee ID" />
             </div>
           </div>
 
