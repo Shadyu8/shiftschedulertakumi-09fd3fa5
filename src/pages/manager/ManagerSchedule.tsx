@@ -104,16 +104,25 @@ function generateTimeSlots(earliest: string, latest: string, incrementMins: numb
 
 function formatAvailLabel(avail: UserAvailability["availability"][number] | undefined): string {
   if (!avail) return "";
-  if (avail.preset === "ALL_DAY") return "All day";
-  if (avail.preset === "UNAVAILABLE") return "Unavailable";
-  if (avail.preset === "UNTIL_17") return avail.endTime ? `Until ${avail.endTime}` : "Until 17:00";
-  if (avail.preset === "FROM_17") return avail.startTime ? `From ${avail.startTime}` : "From 17:00";
-  if (avail.preset === "FROM_13") return avail.startTime ? `From ${avail.startTime}` : "From 13:00";
-  if (avail.preset === "FROM_15") return avail.startTime ? `From ${avail.startTime}` : "From 15:00";
-  if (avail.startTime && avail.endTime) return `${avail.startTime}–${avail.endTime}`;
-  if (avail.startTime) return `From ${avail.startTime}`;
-  if (avail.endTime) return `Until ${avail.endTime}`;
-  return "";
+  switch (avail.preset) {
+    case "ALL_DAY": return "All day";
+    case "UNAVAILABLE": return "Unavailable";
+    case "UNTIL_16": return "Until 16:00";
+    case "UNTIL_17": return avail.endTime ? `Until ${avail.endTime}` : "Until 17:00";
+    case "FROM_13": return avail.startTime ? `From ${avail.startTime}` : "From 13:00";
+    case "FROM_14": return "From 14:00";
+    case "FROM_15": return avail.startTime ? `From ${avail.startTime}` : "From 15:00";
+    case "FROM_16": return "From 16:00";
+    case "FROM_17": return avail.startTime ? `From ${avail.startTime}` : "From 17:00";
+    case "CUSTOM":
+      if (avail.startTime && avail.endTime) return `${avail.startTime}–${avail.endTime}`;
+      return "Custom";
+    default:
+      if (avail.startTime && avail.endTime) return `${avail.startTime}–${avail.endTime}`;
+      if (avail.startTime) return `From ${avail.startTime}`;
+      if (avail.endTime) return `Until ${avail.endTime}`;
+      return "";
+  }
 }
 
 const TEMPLATES = [
