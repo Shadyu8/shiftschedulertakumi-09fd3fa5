@@ -62,18 +62,24 @@ export default function ManagerSettings() {
   const [kioskCreating, setKioskCreating] = useState(false);
 
   useEffect(() => {
-    if (!profile?.organization_id) return;
+    if (!profile?.organization_id || !user) return;
+    // Fetch manager's assigned locations (or all org locations for admins)
     supabase
-      .from("locations")
-      .select("*")
-      .eq("organization_id", profile.organization_id)
-      .then(({ data }) => {
-        if (data) {
-          setLocations(data);
-          if (data.length > 0) setSelectedLoc(data[0].id);
+      .from("user_locations")
+      .select("location_id, locations(id, name)")
+      .eq("user_id", user.id)
+      .then(async ({ data: ulData }) => {
+        let locs: { id: string; name: string }[] = [];
+        if (ulData && ulData.length > 0) {
+          locs = (ulData as any[]).map((d) => d.locations).filter(Boolean);
+        } else {
+          const { data } = await supabase.from("locations").select("id, name").eq("organization_id", profile.organization_id!);
+          locs = (data || []) as { id: string; name: string }[];
         }
+        setLocations(locs);
+        if (locs.length > 0) setSelectedLoc(locs[0].id);
       });
-  }, [profile]);
+  }, [profile, user]);
 
   useEffect(() => {
     if (!selectedLoc) return;

@@ -22,6 +22,7 @@ export type Database = {
           day_of_week: number
           end_time: string | null
           id: string
+          location_id: string | null
           preset: string | null
           start_time: string | null
           updated_at: string
@@ -35,6 +36,7 @@ export type Database = {
           day_of_week: number
           end_time?: string | null
           id?: string
+          location_id?: string | null
           preset?: string | null
           start_time?: string | null
           updated_at?: string
@@ -48,13 +50,22 @@ export type Database = {
           day_of_week?: number
           end_time?: string | null
           id?: string
+          location_id?: string | null
           preset?: string | null
           start_time?: string | null
           updated_at?: string
           user_id?: string
           week_start?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "availability_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       availability_exceptions: {
         Row: {
@@ -64,6 +75,7 @@ export type Database = {
           date: string
           end_time: string | null
           id: string
+          location_id: string | null
           preset: string | null
           reason: string | null
           start_time: string | null
@@ -77,6 +89,7 @@ export type Database = {
           date: string
           end_time?: string | null
           id?: string
+          location_id?: string | null
           preset?: string | null
           reason?: string | null
           start_time?: string | null
@@ -90,19 +103,29 @@ export type Database = {
           date?: string
           end_time?: string | null
           id?: string
+          location_id?: string | null
           preset?: string | null
           reason?: string | null
           start_time?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "availability_exceptions_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       availability_templates: {
         Row: {
           created_at: string
           entries: Json
           id: string
+          location_id: string | null
           name: string
           updated_at: string
           user_id: string
@@ -111,6 +134,7 @@ export type Database = {
           created_at?: string
           entries?: Json
           id?: string
+          location_id?: string | null
           name?: string
           updated_at?: string
           user_id: string
@@ -119,11 +143,20 @@ export type Database = {
           created_at?: string
           entries?: Json
           id?: string
+          location_id?: string | null
           name?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "availability_templates_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       kiosk_accounts: {
         Row: {

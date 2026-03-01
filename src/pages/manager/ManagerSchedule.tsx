@@ -138,7 +138,7 @@ const TEMPLATES = [
 // ── Component ──
 
 export default function ManagerSchedule() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState("");
   const [weekStart, setWeekStart] = useState(getMonWeekStart(new Date()));
@@ -197,18 +197,45 @@ export default function ManagerSchedule() {
   // ── Data fetching ──
 
   useEffect(() => {
-    if (!profile?.organization_id) return;
-    Promise.all([
-      supabase.from("locations").select("id, name").eq("organization_id", profile.organization_id),
-      supabase.from("profiles").select("user_id, full_name").eq("organization_id", profile.organization_id),
-    ]).then(([locRes, workersRes]) => {
-      if (locRes.data) {
-        setLocations(locRes.data);
-        if (!locationId && locRes.data.length > 0) setLocationId(locRes.data[0].id);
-      }
-      if (workersRes.data) setWorkers(workersRes.data);
-    });
-  }, [profile]);
+    if (!profile?.organization_id || !user) return;
+    // Fetch manager's assigned locations (or all org locations for admins)
+    supabase
+      .from("user_locations")
+      .select("location_id, locations(id, name)")
+      .eq("user_id", user.id)
+      .then(async ({ data: ulData }) => {
+        let locs: Location[] = [];
+        if (ulData && ulData.length > 0) {
+          locs = (ulData as any[]).map((d) => d.locations).filter(Boolean);
+        } else {
+          // Fallback: admin or manager with no specific assignments sees all org locations
+          const { data } = await supabase.from("locations").select("id, name").eq("organization_id", profile.organization_id!);
+          locs = (data || []) as Location[];
+        }
+        setLocations(locs);
+        if (!locationId && locs.length > 0) setLocationId(locs[0].id);
+      });
+  }, [profile, user]);
+
+  // Fetch workers assigned to selected location
+  useEffect(() => {
+    if (!locationId || !profile?.organization_id) return;
+    supabase
+      .from("user_locations")
+      .select("user_id, profiles:user_id(user_id, full_name)")
+      .eq("location_id", locationId)
+      .then(({ data }) => {
+        if (data) {
+          const w: Worker[] = (data as any[])
+            .map((d) => d.profiles)
+            .filter(Boolean)
+            .map((p: any) => ({ user_id: p.user_id, full_name: p.full_name }));
+          // Deduplicate
+          const unique = Array.from(new Map(w.map((x) => [x.user_id, x])).values());
+          setWorkers(unique);
+        }
+      });
+  }, [locationId, profile]);
 
   useEffect(() => {
     if (!locationId || !profile?.organization_id) return;
@@ -216,10 +243,10 @@ export default function ManagerSchedule() {
     const endDate = toLocalDateStr(addDays(weekStart, 6));
 
     Promise.all([
-      // Shifts
+      // Shifts for this location
       supabase.from("shifts").select("*").eq("location_id", locationId).gte("date", ws).lte("date", endDate).order("date").order("start_time"),
-      // Availability for all workers in org for this week
-      supabase.from("availability").select("user_id, day_of_week, available, start_time, end_time, preset").eq("week_start", ws),
+      // Availability for this location and week
+      supabase.from("availability").select("user_id, day_of_week, available, start_time, end_time, preset").eq("week_start", ws).eq("location_id", locationId),
       // Location settings
       supabase.from("location_settings").select("*").eq("location_id", locationId).maybeSingle(),
     ]).then(async ([shiftsRes, availRes, settingsRes]) => {
