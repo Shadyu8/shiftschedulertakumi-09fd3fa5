@@ -27,9 +27,10 @@ interface Location {
 type ViewMode = "day" | "week";
 
 export default function ShiftSchedulePage() {
-  const { user, role, profile } = useAuth();
+  const { user, role } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
   const [selectedLoc, setSelectedLoc] = useState(() => {
     return localStorage.getItem("shiftschedule_selected_location") || "";
   });
@@ -66,22 +67,28 @@ export default function ShiftSchedulePage() {
     touchEndX.current = null;
   }, [viewMode]);
 
-  // Fetch locations — managers/admins see all org locations, others see user_locations
+  // Persist selected location
+  useEffect(() => {
+    if (selectedLoc) {
+      localStorage.setItem("shiftschedule_selected_location", selectedLoc);
+    }
+  }, [selectedLoc]);
+
+  // Fetch locations — managers/admins see org locations, others see assigned locations
   useEffect(() => {
     if (!user) return;
 
     async function fetchLocations() {
+      setLocationsLoading(true);
       let locs: Location[] = [];
 
       if (role === "manager" || role === "admin") {
-        // Fetch all locations in the user's organization
         const { data } = await supabase
           .from("locations")
           .select("id, name")
           .order("name");
         locs = (data || []) as Location[];
       } else {
-        // Fetch locations assigned to the user
         const { data } = await supabase
           .from("user_locations")
           .select("location_id, locations(id, name)")
@@ -89,16 +96,18 @@ export default function ShiftSchedulePage() {
         locs = (data || []).map((d: any) => d.locations).filter(Boolean);
       }
 
-      setLocations(locs);
-      // Auto-select: saved preference > only location > first
+      const uniqueLocs = Array.from(new Map(locs.map((l) => [l.id, l])).values());
+      setLocations(uniqueLocs);
+
+      // Auto-select: saved valid location > first available location
       const saved = localStorage.getItem("shiftschedule_selected_location");
-      if (saved && locs.some((l) => l.id === saved)) {
-        setSelectedLoc(saved);
-      } else if (locs.length === 1) {
-        setSelectedLoc(locs[0].id);
-      } else if (locs.length > 0 && !selectedLoc) {
-        setSelectedLoc(locs[0].id);
-      }
+      const resolvedSelection =
+        saved && uniqueLocs.some((l) => l.id === saved)
+          ? saved
+          : uniqueLocs[0]?.id || "";
+
+      setSelectedLoc(resolvedSelection);
+      setLocationsLoading(false);
     }
 
     fetchLocations();
@@ -265,12 +274,9 @@ export default function ShiftSchedulePage() {
         <h1 className="page-header">📆 Shift Schedule</h1>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedLoc} onValueChange={(v) => {
-            setSelectedLoc(v);
-            localStorage.setItem("shiftschedule_selected_location", v);
-          }}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select location" />
+          <Select value={selectedLoc} onValueChange={setSelectedLoc}>
+            <SelectTrigger className="w-[180px]" disabled={locationsLoading || locations.length === 0}>
+              <SelectValue placeholder={locationsLoading ? "Loading..." : "Select location"} />
             </SelectTrigger>
             <SelectContent>
               {locations.map((l) => (
@@ -282,16 +288,16 @@ export default function ShiftSchedulePage() {
           </Select>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={prevDay}>
+            <Button variant="outline" size="icon" onClick={prevDay} disabled={!selectedLoc}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="font-medium text-foreground min-w-[180px] text-center text-sm">
               {dayLabel}
             </span>
-            <Button variant="outline" size="icon" onClick={nextDay}>
+            <Button variant="outline" size="icon" onClick={nextDay} disabled={!selectedLoc}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={goToday} className="text-xs">
+            <Button variant="ghost" size="sm" onClick={goToday} className="text-xs" disabled={!selectedLoc}>
               Today
             </Button>
           </div>
@@ -301,18 +307,22 @@ export default function ShiftSchedulePage() {
             value={viewMode}
             onValueChange={(v) => v && setViewMode(v as ViewMode)}
           >
-            <ToggleGroupItem value="day" aria-label="Day view" className="gap-1.5 text-xs">
+            <ToggleGroupItem value="day" aria-label="Day view" className="gap-1.5 text-xs" disabled={!selectedLoc}>
               <Calendar className="h-3.5 w-3.5" /> Day
             </ToggleGroupItem>
-            <ToggleGroupItem value="week" aria-label="Week view" className="gap-1.5 text-xs">
+            <ToggleGroupItem value="week" aria-label="Week view" className="gap-1.5 text-xs" disabled={!selectedLoc}>
               <CalendarDays className="h-3.5 w-3.5" /> Week
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </div>
 
-      {!selectedLoc ? (
-        <p className="text-muted-foreground">Select a location to view the shift schedule.</p>
+      {locationsLoading ? (
+        <p className="text-muted-foreground">Loading locations...</p>
+      ) : !selectedLoc ? (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <p className="text-muted-foreground text-sm">No locations available yet. Ask an admin/manager to assign your account to a location.</p>
+        </div>
       ) : loading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : (
