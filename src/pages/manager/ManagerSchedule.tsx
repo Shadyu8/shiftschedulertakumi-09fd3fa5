@@ -82,10 +82,10 @@ function formatDayWithDate(date: Date): string {
   return date.toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" });
 }
 
-// Map JS getDay() (0=Sun) to day_of_week (1=Mon..7=Sun)
+// Map JS getDay() (0=Sun) to day_of_week (0=Mon..6=Sun) matching DB
 function getDayOfWeek(date: Date): number {
   const d = getDay(date);
-  return d === 0 ? 7 : d;
+  return d === 0 ? 6 : d - 1;
 }
 
 function generateTimeSlots(earliest: string, latest: string, incrementMins: number): string[] {
@@ -282,20 +282,26 @@ export default function ManagerSchedule() {
     });
   }, [shifts]);
 
-  // Sync workerOrder
+  // Sync workerOrder from ALL workers (not just those with availability)
   useEffect(() => {
     setWorkerOrder((prev) => {
-      const newIds = availabilities.map((ua) => ua.userId);
+      const newIds = workers.map((w) => w.user_id);
       const kept = prev.filter((id) => newIds.includes(id));
       const added = newIds.filter((id) => !prev.includes(id));
       return [...kept, ...added];
     });
-  }, [availabilities]);
+  }, [workers]);
 
   const days = getWeekDays(weekStart);
   const hasUnpublished = shifts.some((s) => !s.published);
   const timeSlots = generateTimeSlots(locationSettings.earliest_shift_start, locationSettings.latest_shift_end, locationSettings.time_entry_increment_mins);
-  const orderedAvailabilities = workerOrder.map((id) => availabilities.find((ua) => ua.userId === id)).filter(Boolean) as UserAvailability[];
+  // Build ordered list of ALL workers with their availability (empty if none)
+  const orderedAvailabilities: UserAvailability[] = workerOrder.map((id) => {
+    const existing = availabilities.find((ua) => ua.userId === id);
+    if (existing) return existing;
+    const w = workers.find((w) => w.user_id === id);
+    return { userId: id, fullName: w?.full_name ?? "Unknown", role: "", availability: {} };
+  });
   const todayStr = toLocalDateStr(new Date());
 
   // ── Actions ──
@@ -478,10 +484,8 @@ export default function ManagerSchedule() {
   const selectedDay = days[selectedDayIndex];
   const selectedDateStr = toLocalDateStr(selectedDay);
   const selectedDow = getDayOfWeek(selectedDay);
-  const selectedAvailableWorkers = availabilities.filter((ua) => {
-    const avail = ua.availability[selectedDow];
-    return avail && avail.available && avail.preset !== "UNAVAILABLE";
-  });
+  // Show all workers for the selected day (available ones first, then others)
+  const selectedAllWorkers = orderedAvailabilities;
   const selectedDayShifts = shifts.filter((s) => s.date === selectedDateStr);
 
   // Workers for add modal
@@ -660,10 +664,10 @@ export default function ManagerSchedule() {
           {/* ── Mobile day view (card only) ── */}
           {viewMode === "card" && (
           <div className="md:hidden space-y-2 pb-24">
-            {selectedAvailableWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAvailableWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
-              <p className="text-sm text-muted-foreground text-center mt-6">No availability submitted for this day</p>
+            {selectedAllWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center mt-6">No workers found</p>
             )}
-            {selectedAvailableWorkers.map((ua) => {
+            {selectedAllWorkers.map((ua) => {
               const avail = ua.availability[selectedDow];
               const workerShifts = selectedDayShifts.filter((s) => s.user_id === ua.userId);
               const isExpanded = expandedWorkers.has(ua.userId);
@@ -723,7 +727,7 @@ export default function ManagerSchedule() {
             })}
             {/* Workers with shifts but no availability for this day */}
             {selectedDayShifts
-              .filter((s) => !selectedAvailableWorkers.find((ua) => ua.userId === s.user_id))
+              .filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id))
               .map((s) => {
                 const isExpanded = expandedWorkers.has(s.user_id);
                 const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
