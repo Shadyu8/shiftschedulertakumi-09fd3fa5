@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format, startOfWeek, addDays, isBefore, isToday, startOfDay } from "date-fns";
-import { ChevronLeft, ChevronRight, Lock, Send, Save, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Send, Save, Download, MapPin } from "lucide-react";
 
 const DAYS = [
   { dow: 0, label: "Monday" },
@@ -47,6 +47,11 @@ interface LocationConfig {
   availability_from_end: string;
   availability_to_start: string;
   availability_to_end: string;
+}
+
+interface UserLocation {
+  id: string;
+  name: string;
 }
 
 function getMonWeekStart(date: Date): Date {
@@ -105,6 +110,14 @@ export default function WorkerAvailability() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasTemplate, setHasTemplate] = useState(false);
+
+  // Location state
+  const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState(() => {
+    return localStorage.getItem("worker_availability_location") || "";
+  });
+  const [locationsLoading, setLocationsLoading] = useState(true);
+
   const [locationConfig, setLocationConfig] = useState<LocationConfig>({
     earliest_shift_start: "11:30",
     latest_shift_end: "23:00",
@@ -128,57 +141,83 @@ export default function WorkerAvailability() {
     [locationConfig.availability_to_start, locationConfig.availability_to_end]
   );
 
-  // Fetch location config
+  // Persist selected location
+  useEffect(() => {
+    if (selectedLocationId) {
+      localStorage.setItem("worker_availability_location", selectedLocationId);
+    }
+  }, [selectedLocationId]);
+
+  // Fetch user's assigned locations
   useEffect(() => {
     if (!user) return;
+    setLocationsLoading(true);
     supabase
       .from("user_locations")
-      .select("location_id")
+      .select("location_id, locations(id, name)")
       .eq("user_id", user.id)
-      .limit(1)
-      .then(async ({ data: ulData }) => {
-        if (ulData && ulData.length > 0) {
-          const { data: settings } = await supabase
-            .from("location_settings")
-            .select("*")
-            .eq("location_id", ulData[0].location_id)
-            .maybeSingle();
-          if (settings) {
-            setLocationConfig({
-              earliest_shift_start: settings.earliest_shift_start,
-              latest_shift_end: settings.latest_shift_end,
-              availability_from_start: (settings as any).availability_from_start || "12:00",
-              availability_from_end: (settings as any).availability_from_end || "18:00",
-              availability_to_start: (settings as any).availability_to_start || "15:00",
-              availability_to_end: (settings as any).availability_to_end || "22:00",
-            });
-          }
-        }
+      .then(({ data }) => {
+        const locs: UserLocation[] = (data || [])
+          .map((d: any) => d.locations)
+          .filter(Boolean);
+        setUserLocations(locs);
+
+        const saved = localStorage.getItem("worker_availability_location");
+        const resolvedSelection =
+          saved && locs.some((l) => l.id === saved)
+            ? saved
+            : locs[0]?.id || "";
+        setSelectedLocationId(resolvedSelection);
+        setLocationsLoading(false);
       });
   }, [user]);
 
-  // Check if template exists
+  // Fetch location config for selected location
   useEffect(() => {
-    if (!user) return;
+    if (!selectedLocationId) return;
+    supabase
+      .from("location_settings")
+      .select("*")
+      .eq("location_id", selectedLocationId)
+      .maybeSingle()
+      .then(({ data: settings }) => {
+        if (settings) {
+          setLocationConfig({
+            earliest_shift_start: settings.earliest_shift_start,
+            latest_shift_end: settings.latest_shift_end,
+            availability_from_start: (settings as any).availability_from_start || "12:00",
+            availability_from_end: (settings as any).availability_from_end || "18:00",
+            availability_to_start: (settings as any).availability_to_start || "15:00",
+            availability_to_end: (settings as any).availability_to_end || "22:00",
+          });
+        }
+      });
+  }, [selectedLocationId]);
+
+  // Check if template exists for this location
+  useEffect(() => {
+    if (!user || !selectedLocationId) return;
     (supabase as any)
       .from("availability_templates")
       .select("id")
       .eq("user_id", user.id)
+      .eq("location_id", selectedLocationId)
       .limit(1)
       .then(({ data }: any) => {
         setHasTemplate(data && data.length > 0);
       });
-  }, [user]);
+  }, [user, selectedLocationId]);
 
-  // Fetch availability for current week
+  // Fetch availability for current week + location
   useEffect(() => {
-    if (!user) return;
+    if (!user || !selectedLocationId) return;
     setLoading(true);
     supabase
       .from("availability")
       .select("*")
       .eq("user_id", user.id)
       .eq("week_start", weekStartStr)
+      .eq("location_id", selectedLocationId)
       .then(({ data }) => {
         if (data && data.length > 0) {
           setSubmitted(true);
@@ -204,7 +243,7 @@ export default function WorkerAvailability() {
         }
         setLoading(false);
       });
-  }, [user, weekStartStr]);
+  }, [user, weekStartStr, selectedLocationId]);
 
   function makeDefaultEntry(dow: number): AvailabilityEntry {
     return {
@@ -270,7 +309,7 @@ export default function WorkerAvailability() {
   }
 
   async function handleSubmit() {
-    if (!user) return;
+    if (!user || !selectedLocationId) return;
     const validationError = validateEntries();
     if (validationError) {
       toast.error(validationError);
@@ -278,7 +317,12 @@ export default function WorkerAvailability() {
     }
     setSaving(true);
     try {
-      await supabase.from("availability").delete().eq("user_id", user.id).eq("week_start", weekStartStr);
+      await supabase
+        .from("availability")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("week_start", weekStartStr)
+        .eq("location_id", selectedLocationId);
       const rows = entries.map((e) => ({
         user_id: user.id,
         week_start: weekStartStr,
@@ -287,6 +331,7 @@ export default function WorkerAvailability() {
         start_time: e.available ? e.start_time : null,
         end_time: e.available ? e.end_time : null,
         preset: e.preset,
+        location_id: selectedLocationId,
       }));
       const { error } = await supabase.from("availability").insert(rows);
       if (error) throw error;
@@ -300,7 +345,7 @@ export default function WorkerAvailability() {
   }
 
   async function saveTemplate() {
-    if (!user) return;
+    if (!user || !selectedLocationId) return;
     const templateData = entries.map((e) => ({
       day_of_week: e.day_of_week,
       available: e.available,
@@ -309,11 +354,16 @@ export default function WorkerAvailability() {
       preset: e.preset,
     }));
     try {
-      await (supabase as any).from("availability_templates").delete().eq("user_id", user.id);
+      await (supabase as any)
+        .from("availability_templates")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("location_id", selectedLocationId);
       const { error } = await (supabase as any).from("availability_templates").insert({
         user_id: user.id,
         name: "My Template",
         entries: templateData,
+        location_id: selectedLocationId,
       });
       if (error) throw error;
       setHasTemplate(true);
@@ -324,16 +374,17 @@ export default function WorkerAvailability() {
   }
 
   async function loadTemplate() {
-    if (!user) return;
+    if (!user || !selectedLocationId) return;
     try {
       const { data, error } = await (supabase as any)
         .from("availability_templates")
         .select("entries")
         .eq("user_id", user.id)
+        .eq("location_id", selectedLocationId)
         .limit(1)
         .single();
       if (error || !data) {
-        toast.error("No template found. Save your current availability as a template first.");
+        toast.error("No template found for this location. Save your current availability as a template first.");
         return;
       }
       const templateEntries = (data.entries as any[]).map((e: any) => ({
@@ -352,164 +403,196 @@ export default function WorkerAvailability() {
 
   const canEdit = !submitted && !isLocked && !isPastWeek;
   const weekLabel = `${format(weekStart, "d MMM")} – ${format(weekEndDate, "d MMM yyyy")}`;
+  const selectedLocationName = userLocations.find((l) => l.id === selectedLocationId)?.name;
 
   return (
     <AppLayout>
       <h1 className="page-header mb-2">📋 Availability</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Set your availability for each week. Once submitted, it's locked so the manager can build the schedule.
+      <p className="text-sm text-muted-foreground mb-4">
+        Set your availability for each week per location. Once submitted, it's locked so the manager can build the schedule.
       </p>
 
-      {/* Week navigation */}
-      <div className="flex items-center justify-between mb-4">
-        <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, -7))}>
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-        <div className="text-center">
-          <p className="font-semibold text-foreground text-sm">{weekLabel}</p>
-          {submitted && (
-            <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">
-              <Lock className="w-3 h-3" /> Submitted
-            </span>
-          )}
-          {isPastWeek && !submitted && (
-            <span className="text-xs text-muted-foreground mt-1 block">Past week</span>
-          )}
-          {isLocked && (
-            <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-0.5 rounded-full mt-1">
-              <Lock className="w-3 h-3" /> Locked by manager
-            </span>
+      {/* Location selector */}
+      {locationsLoading ? (
+        <p className="text-muted-foreground text-sm mb-4">Loading locations...</p>
+      ) : userLocations.length === 0 ? (
+        <div className="bg-card rounded-xl border border-border p-4 mb-4">
+          <p className="text-muted-foreground text-sm">No locations assigned. Ask an admin/manager to assign you to a location.</p>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mb-4">
+          <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+          {userLocations.length === 1 ? (
+            <span className="text-sm font-medium text-foreground">{userLocations[0].name}</span>
+          ) : (
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger className="w-[180px] h-9 text-sm">
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {userLocations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, 7))}>
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
+      )}
 
-      {/* This Week + Template buttons */}
-      <div className="flex justify-center gap-2 mb-4 flex-wrap">
-        <Button variant="outline" size="sm" onClick={() => setWeekStart(getMonWeekStart(new Date()))}>
-          This Week
-        </Button>
-        {canEdit && (
-          <>
-            <Button variant="outline" size="sm" onClick={saveTemplate}>
-              <Save className="w-3.5 h-3.5 mr-1.5" /> Save Template
-            </Button>
-            {hasTemplate && (
-              <Button variant="outline" size="sm" onClick={loadTemplate}>
-                <Download className="w-3.5 h-3.5 mr-1.5" /> Use Template
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-
-      {loading ? (
-        <p className="text-muted-foreground text-center py-8 animate-pulse">Loading...</p>
-      ) : (
+      {!selectedLocationId ? null : (
         <>
-          {/* Day entries */}
-          <div className="space-y-2 mb-6">
-            {entries.map((entry, i) => {
-              const dayInfo = DAYS[i];
-              const dayDate = addDays(weekStart, i);
-
-              return (
-                <div key={dayInfo.dow} className="bg-card border border-border rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="font-semibold text-foreground text-sm">{dayInfo.label}</h3>
-                      <p className="text-xs text-muted-foreground">{format(dayDate, "dd/MM")}</p>
-                    </div>
-                    {entry.preset === "UNAVAILABLE" ? (
-                      <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded">
-                        Unavailable
-                      </span>
-                    ) : (
-                      <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded">
-                        {formatBadge(entry)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Preset buttons */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESETS.map((p) => (
-                      <button
-                        key={p.value}
-                        onClick={() => canEdit && selectPreset(i, p.value)}
-                        disabled={!canEdit}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                          entry.preset === p.value
-                            ? p.value === "UNAVAILABLE"
-                              ? "bg-destructive text-destructive-foreground border-destructive"
-                              : "bg-primary text-primary-foreground border-primary"
-                            : "bg-muted text-muted-foreground border-border hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Custom time pickers - only shown when CUSTOM is selected */}
-                  {entry.preset === "CUSTOM" && entry.available && (
-                    <div className="flex items-center gap-3 mt-3">
-                      <div className="flex-1">
-                        <label className="text-xs text-muted-foreground mb-1 block">From</label>
-                        <Select
-                          value={entry.start_time || ""}
-                          onValueChange={(v) => canEdit && setCustomTime(i, "start_time", v)}
-                          disabled={!canEdit}
-                        >
-                          <SelectTrigger className="h-9 text-xs">
-                            <SelectValue placeholder="Start" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {customFromSlots.map((slot) => (
-                              <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <span className="text-muted-foreground mt-5">–</span>
-                      <div className="flex-1">
-                        <label className="text-xs text-muted-foreground mb-1 block">To</label>
-                        <Select
-                          value={entry.end_time || ""}
-                          onValueChange={(v) => canEdit && setCustomTime(i, "end_time", v)}
-                          disabled={!canEdit}
-                        >
-                          <SelectTrigger className="h-9 text-xs">
-                            <SelectValue placeholder="End" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {customToSlots.map((slot) => (
-                              <SelectItem key={slot} value={slot}>{slot}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          {/* Week navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, -7))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div className="text-center">
+              <p className="font-semibold text-foreground text-sm">{weekLabel}</p>
+              {submitted && (
+                <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1">
+                  <Lock className="w-3 h-3" /> Submitted
+                </span>
+              )}
+              {isPastWeek && !submitted && (
+                <span className="text-xs text-muted-foreground mt-1 block">Past week</span>
+              )}
+              {isLocked && (
+                <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-0.5 rounded-full mt-1">
+                  <Lock className="w-3 h-3" /> Locked by manager
+                </span>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setWeekStart((w) => addDays(w, 7))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
 
-          {/* Submit button */}
-          {canEdit && (
-            <Button onClick={handleSubmit} disabled={saving} className="w-full" size="lg">
-              <Send className="w-4 h-4 mr-2" />
-              {saving ? "Submitting..." : "Submit Availability"}
+          {/* This Week + Template buttons */}
+          <div className="flex justify-center gap-2 mb-4 flex-wrap">
+            <Button variant="outline" size="sm" onClick={() => setWeekStart(getMonWeekStart(new Date()))}>
+              This Week
             </Button>
-          )}
+            {canEdit && (
+              <>
+                <Button variant="outline" size="sm" onClick={saveTemplate}>
+                  <Save className="w-3.5 h-3.5 mr-1.5" /> Save Template
+                </Button>
+                {hasTemplate && (
+                  <Button variant="outline" size="sm" onClick={loadTemplate}>
+                    <Download className="w-3.5 h-3.5 mr-1.5" /> Use Template
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
 
-          {submitted && (
-            <p className="text-sm text-muted-foreground text-center">
-              Your availability for this week has been submitted and locked. Navigate to another week to submit new availability.
-            </p>
+          {loading ? (
+            <p className="text-muted-foreground text-center py-8 animate-pulse">Loading...</p>
+          ) : (
+            <>
+              {/* Day entries */}
+              <div className="space-y-2 mb-6">
+                {entries.map((entry, i) => {
+                  const dayInfo = DAYS[i];
+                  const dayDate = addDays(weekStart, i);
+
+                  return (
+                    <div key={dayInfo.dow} className="bg-card border border-border rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="font-semibold text-foreground text-sm">{dayInfo.label}</h3>
+                          <p className="text-xs text-muted-foreground">{format(dayDate, "dd/MM")}</p>
+                        </div>
+                        {entry.preset === "UNAVAILABLE" ? (
+                          <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded">
+                            Unavailable
+                          </span>
+                        ) : (
+                          <span className="text-xs text-primary font-medium bg-primary/10 px-2 py-1 rounded">
+                            {formatBadge(entry)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Preset buttons */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {PRESETS.map((p) => (
+                          <button
+                            key={p.value}
+                            onClick={() => canEdit && selectPreset(i, p.value)}
+                            disabled={!canEdit}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                              entry.preset === p.value
+                                ? p.value === "UNAVAILABLE"
+                                  ? "bg-destructive text-destructive-foreground border-destructive"
+                                  : "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted text-muted-foreground border-border hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Custom time pickers */}
+                      {entry.preset === "CUSTOM" && entry.available && (
+                        <div className="flex items-center gap-3 mt-3">
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                            <Select
+                              value={entry.start_time || ""}
+                              onValueChange={(v) => canEdit && setCustomTime(i, "start_time", v)}
+                              disabled={!canEdit}
+                            >
+                              <SelectTrigger className="h-9 text-xs">
+                                <SelectValue placeholder="Start" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {customFromSlots.map((slot) => (
+                                  <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <span className="text-muted-foreground mt-5">–</span>
+                          <div className="flex-1">
+                            <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                            <Select
+                              value={entry.end_time || ""}
+                              onValueChange={(v) => canEdit && setCustomTime(i, "end_time", v)}
+                              disabled={!canEdit}
+                            >
+                              <SelectTrigger className="h-9 text-xs">
+                                <SelectValue placeholder="End" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {customToSlots.map((slot) => (
+                                  <SelectItem key={slot} value={slot}>{slot}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Submit button */}
+              {canEdit && (
+                <Button onClick={handleSubmit} disabled={saving} className="w-full" size="lg">
+                  <Send className="w-4 h-4 mr-2" />
+                  {saving ? "Submitting..." : "Submit Availability"}
+                </Button>
+              )}
+
+              {submitted && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Your availability for this week at {selectedLocationName} has been submitted and locked. Navigate to another week to submit new availability.
+                </p>
+              )}
+            </>
           )}
         </>
       )}
