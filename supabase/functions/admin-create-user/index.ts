@@ -18,9 +18,12 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify the caller is authenticated and is an admin or manager
+    // Admin client for privileged operations
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // Verify the caller using anon key client with user's token
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -30,16 +33,20 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: caller } } = await supabase.auth.getUser(token);
-    if (!caller) {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
+    if (authError || !caller) {
+      console.error("Auth verification error:", authError);
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check caller role
-    const { data: callerRole } = await supabase
+    // Check caller role using admin client (bypasses RLS)
+    const { data: callerRole } = await adminClient
       .from("user_roles")
       .select("role")
       .eq("user_id", caller.id)
@@ -62,7 +69,14 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { error } = await supabase.auth.admin.deleteUser(body.user_id);
+      // Prevent deleting yourself
+      if (body.user_id === caller.id) {
+        return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { error } = await adminClient.auth.admin.deleteUser(body.user_id);
       if (error) {
         console.error("Delete user error:", error);
         return new Response(JSON.stringify({ error: "Failed to delete user" }), {
@@ -70,6 +84,104 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Update user action
+    if (body.action === "update") {
+      if (!body.user_id || !UUID_REGEX.test(body.user_id)) {
+        return new Response(JSON.stringify({ error: "Invalid user ID" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Update profile fields
+      const profileUpdates: Record<string, any> = {};
+      if (body.full_name !== undefined) {
+        if (typeof body.full_name !== "string" || body.full_name.trim().length === 0 || body.full_name.length > 100) {
+          return new Response(JSON.stringify({ error: "Name must be 1-100 characters" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        profileUpdates.full_name = body.full_name.trim();
+      }
+      if (body.active !== undefined) {
+        profileUpdates.active = Boolean(body.active);
+      }
+
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: profileError } = await adminClient
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("user_id", body.user_id);
+        if (profileError) {
+          console.error("Update profile error:", profileError);
+          return new Response(JSON.stringify({ error: "Failed to update profile" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // Update role if provided
+      if (body.role) {
+        if (!VALID_ROLES.includes(body.role)) {
+          return new Response(JSON.stringify({ error: "Invalid role" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        // Only admins can promote to manager
+        if (body.role === "manager" && callerRole.role !== "admin") {
+          return new Response(JSON.stringify({ error: "Only admins can promote to manager" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        // Only admins can promote to admin
+        if (body.role === "admin" && callerRole.role !== "admin") {
+          return new Response(JSON.stringify({ error: "Only admins can promote to admin" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const { error: roleError } = await adminClient
+          .from("user_roles")
+          .update({ role: body.role })
+          .eq("user_id", body.user_id);
+        if (roleError) {
+          console.error("Update role error:", roleError);
+          return new Response(JSON.stringify({ error: "Failed to update role" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // Update password if provided
+      if (body.password) {
+        if (typeof body.password !== "string" || body.password.length < 8 || body.password.length > 128) {
+          return new Response(JSON.stringify({ error: "Password must be 8-128 characters" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const { error: pwError } = await adminClient.auth.admin.updateUserById(body.user_id, {
+          password: body.password,
+        });
+        if (pwError) {
+          console.error("Update password error:", pwError);
+          return new Response(JSON.stringify({ error: "Failed to update password" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -129,7 +241,7 @@ serve(async (req) => {
     }
 
     // Create user in auth
-    const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -153,7 +265,7 @@ serve(async (req) => {
 
     // Update profile with organization
     if (organization_id && newUser.user) {
-      await supabase
+      await adminClient
         .from("profiles")
         .update({ organization_id })
         .eq("user_id", newUser.user.id);
