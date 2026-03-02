@@ -168,6 +168,12 @@ export default function ManagerSchedule() {
   const [addWorkerModal, setAddWorkerModal] = useState<{ date: string } | null>(null);
   const [addWorkerSearch, setAddWorkerSearch] = useState("");
 
+  // Date availability popup (spreadsheet header click)
+  const [dateAvailPopup, setDateAvailPopup] = useState<string | null>(null);
+
+  // Dismiss availability confirmation
+  const [dismissConfirm, setDismissConfirm] = useState<{ key: string } | null>(null);
+
   // Drag & drop shifts
   const dragShiftId = useRef<string | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
@@ -400,7 +406,11 @@ export default function ManagerSchedule() {
     if (error) { toast.error(error.message); return; }
     setShifts((prev) => prev.filter((s) => s.id !== shiftId));
     if (shift) {
-      setDismissedAvail((prev) => new Set(prev).add(`${shift.user_id}|${shift.date}`));
+      setDismissedAvail((prev) => {
+        const next = new Set(prev);
+        next.delete(`${shift.user_id}|${shift.date}`);
+        return next;
+      });
     }
   }
 
@@ -821,9 +831,9 @@ export default function ManagerSchedule() {
                       })}
                       {workerShifts.length === 0 && !isDismissed && (
                         <div className="relative px-3 pt-6 pb-2 rounded-lg bg-warning/10 border border-warning/20">
-                          <button onClick={() => setDismissedAvail((prev) => new Set(prev).add(availKey))} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Dismiss">×</button>
+                          <button onClick={() => setDismissConfirm({ key: availKey })} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Dismiss">×</button>
                           <div className="flex items-center gap-1">
-                            <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
+                             <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
                             <span className="text-muted-foreground text-sm shrink-0">–</span>
                             <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
                           </div>
@@ -937,7 +947,7 @@ export default function ManagerSchedule() {
                     if (isDismissed) return [];
                     return [(
                       <div key={ua.userId} className="relative bg-card border border-border rounded-xl p-3 shadow-sm">
-                        <button onClick={() => setDismissedAvail((prev) => new Set(prev).add(availKey))} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Dismiss">×</button>
+                        <button onClick={() => setDismissConfirm({ key: availKey })} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Dismiss">×</button>
                         <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
                           <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
                           {formatAvailLabel(avail) && (
@@ -1003,12 +1013,18 @@ export default function ManagerSchedule() {
                     const isToday = dateStr === todayStr;
                     return (
                       <th key={dateStr} className={`text-center px-2 py-2 font-semibold text-foreground border-r border-border min-w-[140px] ${isToday ? "bg-primary/5" : ""}`}>
-                        <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                          {day.toLocaleDateString("en-GB", { weekday: "short" })}
-                        </div>
-                        <div className={`text-xs font-bold ${isToday ? "text-primary" : "text-foreground"}`}>
-                          {day.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                        </div>
+                        <button
+                          onClick={() => setDateAvailPopup(dateStr)}
+                          className="w-full hover:bg-primary/10 rounded px-1 py-0.5 transition-colors cursor-pointer"
+                          title="View availability for this day"
+                        >
+                          <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                            {day.toLocaleDateString("en-GB", { weekday: "short" })}
+                          </div>
+                          <div className={`text-xs font-bold ${isToday ? "text-primary" : "text-foreground"}`}>
+                            {day.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          </div>
+                        </button>
                       </th>
                     );
                   })}
@@ -1067,7 +1083,7 @@ export default function ManagerSchedule() {
                             })}
                             {workerShifts.length === 0 && isAvailable && !isDismissed && (
                               <div className="relative rounded px-1 pt-3 pb-1 bg-warning/10 border border-dashed border-warning/30">
-                                <button onClick={() => setDismissedAvail((prev) => new Set(prev).add(availKey))} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Dismiss">×</button>
+                                <button onClick={() => setDismissConfirm({ key: availKey })} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Dismiss">×</button>
                                 <div className="flex gap-0.5 items-center">
                                   <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, dateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: newEnd }); }} />
                                   <span className="text-muted-foreground text-xs shrink-0">–</span>
@@ -1238,6 +1254,95 @@ export default function ManagerSchedule() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Date availability popup (spreadsheet header click) ── */}
+      <Dialog open={!!dateAvailPopup} onOpenChange={(open) => !open && setDateAvailPopup(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              Workers — {dateAvailPopup && format(new Date(dateAvailPopup + "T12:00:00"), "EEEE, d MMM yyyy")}
+            </DialogTitle>
+          </DialogHeader>
+          {dateAvailPopup && (() => {
+            const dow = getDayOfWeek(new Date(dateAvailPopup + "T12:00:00"));
+            const withAvail = orderedAvailabilities.filter((ua) => {
+              const a = ua.availability[dow];
+              return a && a.available && a.preset !== "UNAVAILABLE";
+            });
+            const withoutShift = withAvail.filter((ua) => !shifts.some((s) => s.user_id === ua.userId && s.date === dateAvailPopup));
+            const withShift = withAvail.filter((ua) => shifts.some((s) => s.user_id === ua.userId && s.date === dateAvailPopup));
+            return (
+              <div className="space-y-3">
+                {withoutShift.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Available (no shift yet)</p>
+                    <div className="space-y-1">
+                      {withoutShift.map((ua) => {
+                        const a = ua.availability[dow];
+                        return (
+                          <button
+                            key={ua.userId}
+                            onClick={() => {
+                              setDateAvailPopup(null);
+                              setModal({ userId: ua.userId, userName: ua.fullName, date: dateAvailPopup!, dayAvail: a });
+                              setNewShift({ startTime: a?.startTime ?? "", endTime: a?.endTime ?? "", standby: false });
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between hover:bg-muted transition-colors border border-border"
+                          >
+                            <span className="font-medium">{ua.fullName}</span>
+                            <span className="text-xs text-success font-medium">{formatAvailLabel(a)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {withShift.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Already scheduled</p>
+                    <div className="space-y-1">
+                      {withShift.map((ua) => {
+                        const a = ua.availability[dow];
+                        return (
+                          <div
+                            key={ua.userId}
+                            className="px-3 py-2 rounded-md text-sm flex items-center justify-between opacity-40 border border-border"
+                          >
+                            <span className="font-medium">{ua.fullName}</span>
+                            <span className="text-xs text-muted-foreground">{formatAvailLabel(a)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {withAvail.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No availability submitted for this day</p>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dismiss availability confirmation ── */}
+      <Dialog open={!!dismissConfirm} onOpenChange={(open) => !open && setDismissConfirm(null)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Dismiss Availability</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Remove this availability from the schedule?</p>
+          <div className="flex gap-3 mt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setDismissConfirm(null)}>Cancel</Button>
+            <Button className="flex-1" onClick={() => {
+              if (dismissConfirm) {
+                setDismissedAvail((prev) => new Set(prev).add(dismissConfirm.key));
+              }
+              setDismissConfirm(null);
+            }}>OK</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>
