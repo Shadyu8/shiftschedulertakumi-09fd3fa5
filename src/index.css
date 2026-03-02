@@ -143,38 +143,3 @@
     @apply text-2xl sm:text-3xl font-bold tracking-tight;
   }
 }
-
-/* Mascot animations */
-@keyframes mascot-tail-wag-kf {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(10deg); }
-  75% { transform: rotate(-10deg); }
-}
-@keyframes mascot-eat-bob-kf {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(2px); }
-}
-@keyframes mascot-sleep-pulse-kf {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(0.97); }
-}
-@keyframes mascot-walk-bob-kf {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-@keyframes mascot-steam-kf {
-  0% { opacity: 0.5; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-6px); }
-}
-@keyframes mascot-zzz-kf {
-  0% { opacity: 0; transform: translateY(0); }
-  50% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-8px); }
-}
-
-.mascot-tail-wag { animation: mascot-tail-wag-kf 0.6s ease-in-out infinite; transform-origin: 16px 32px; }
-.mascot-eat-bob { animation: mascot-eat-bob-kf 1s ease-in-out infinite; }
-.mascot-sleep-pulse { animation: mascot-sleep-pulse-kf 2s ease-in-out infinite; }
-.mascot-walk-bob { animation: mascot-walk-bob-kf 0.4s ease-in-out infinite; }
-.mascot-steam { animation: mascot-steam-kf 2s ease-in-out infinite; }
-.mascot-zzz { animation: mascot-zzz-kf 2s ease-in-out infinite; }
