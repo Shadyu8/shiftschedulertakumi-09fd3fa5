@@ -311,7 +311,7 @@ export default function ShiftSchedulePage() {
               Week
             </ToggleGroupItem>
           </ToggleGroup>
-          <Button variant="ghost" size="sm" onClick={goToday} className="text-xs ml-auto" disabled={!selectedLoc}>
+          <Button variant="outline" size="sm" onClick={goToday} className="text-xs ml-auto rounded-full" disabled={!selectedLoc}>
             Today
           </Button>
         </div>
