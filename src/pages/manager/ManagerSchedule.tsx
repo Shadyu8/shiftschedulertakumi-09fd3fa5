@@ -836,7 +836,7 @@ export default function ManagerSchedule() {
             })}
             {/* Workers with shifts but no availability for this day */}
             {selectedDayShifts
-              .filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id))
+              .filter((s) => !orderedAvailabilities.find((ua) => ua.userId === s.user_id))
               .map((s) => {
                 const isExpanded = expandedWorkers.has(s.user_id);
                 const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
@@ -954,8 +954,8 @@ export default function ManagerSchedule() {
                       </div>
                     )];
                   })}
-                  {/* Workers with shifts but no availability */}
-                  {dayShifts.filter((s) => !availableWorkers.find((ua) => ua.userId === s.user_id)).map((s) => {
+                  {/* Workers with shifts but not in orderedAvailabilities */}
+                  {dayShifts.filter((s) => !orderedAvailabilities.find((ua) => ua.userId === s.user_id)).map((s) => {
                     const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                     return (
                       <div key={s.id} draggable onDragStart={() => handleDragStart(s.id)} className="relative bg-card border border-border rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
@@ -1077,10 +1077,20 @@ export default function ManagerSchedule() {
                             )}
                             {workerShifts.length === 0 && (!isAvailable || isDismissed) && (
                               <button
-                                onClick={() => {
+                                onClick={async () => {
                                   const dayAvail = isDismissed && isAvailable ? avail : undefined;
-                                  setModal({ userId: ua.userId, userName: ua.fullName, date: dateStr, dayAvail });
-                                  setNewShift({ startTime: dayAvail?.startTime ?? "", endTime: dayAvail?.endTime ?? "", standby: false });
+                                  const st = dayAvail?.startTime ?? "";
+                                  const et = dayAvail?.endTime ?? "";
+                                  const { error } = await supabase.from("shifts").insert({
+                                    user_id: ua.userId,
+                                    location_id: locationId,
+                                    date: dateStr,
+                                    start_time: st,
+                                    end_time: et,
+                                    standby: false,
+                                  });
+                                  if (error) { toast.error(error.message); return; }
+                                  refreshShifts();
                                 }}
                                 className="w-full min-h-[34px] flex items-center justify-center text-muted-foreground/30 hover:text-primary hover:bg-primary/5 rounded transition-colors text-sm border border-dashed border-border hover:border-primary/30"
                                 title="Add shift"
@@ -1092,10 +1102,10 @@ export default function ManagerSchedule() {
                     })}
                   </tr>
                 ))}
-                {/* Workers with shifts but not in availabilities */}
+                {/* Workers with shifts but not in orderedAvailabilities (e.g. not assigned to location) */}
                 {(() => {
-                  const availUserIds = new Set(availabilities.map((ua) => ua.userId));
-                  const extraShifts = shifts.filter((s) => !availUserIds.has(s.user_id));
+                  const knownUserIds = new Set(orderedAvailabilities.map((ua) => ua.userId));
+                  const extraShifts = shifts.filter((s) => !knownUserIds.has(s.user_id));
                   const extraWorkerIds = [...new Set(extraShifts.map((s) => s.user_id))];
                   return extraWorkerIds.map((userId) => {
                     const workerName = extraShifts.find((s) => s.user_id === userId)?.profile?.full_name ?? "Unknown";
