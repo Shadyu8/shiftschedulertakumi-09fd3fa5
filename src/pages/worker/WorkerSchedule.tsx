@@ -80,7 +80,7 @@ export default function WorkerSchedule() {
             {format(weekStart, "dd MMM")} – {format(addDays(weekStart, 6), "dd MMM yyyy")}
           </h1>
           {weekOffset !== 0 && (
-            <button onClick={() => setWeekOffset(0)} className="text-xs text-primary font-medium mt-0.5">
+            <button onClick={() => setWeekOffset(0)} className="text-xs text-primary font-medium mt-1 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all">
               Go to this week
             </button>
           )}
