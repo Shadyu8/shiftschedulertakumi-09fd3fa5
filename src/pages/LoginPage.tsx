@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,12 +35,23 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Look up email by username (case-insensitive)
+      const { data: email, error: lookupError } = await supabase.rpc("get_email_by_username", {
+        _username: username.trim(),
+      });
+
+      if (lookupError || !email) {
+        setError("Invalid username or password");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await signIn(email, password);
       if (error) {
-        setError(error);
+        // Show generic message to not leak info
+        setError("Invalid username or password");
         setLoading(false);
       }
-      // Navigation is handled by Index via auth state change — no explicit navigate needed
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);
@@ -66,15 +78,15 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your username"
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
 

@@ -20,10 +20,8 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Admin client for privileged operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Verify the caller using anon key client with user's token
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -38,14 +36,12 @@ serve(async (req) => {
     });
     const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
     if (authError || !caller) {
-      console.error("Auth verification error:", authError);
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Check caller role using admin client (bypasses RLS)
     const { data: callerRole } = await adminClient
       .from("user_roles")
       .select("role")
@@ -69,7 +65,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      // Prevent deleting yourself
       if (body.user_id === caller.id) {
         return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
           status: 400,
@@ -98,7 +93,6 @@ serve(async (req) => {
         });
       }
 
-      // Update profile fields
       const profileUpdates: Record<string, any> = {};
       if (body.full_name !== undefined) {
         if (typeof body.full_name !== "string" || body.full_name.trim().length === 0 || body.full_name.length > 100) {
@@ -111,6 +105,9 @@ serve(async (req) => {
       }
       if (body.active !== undefined) {
         profileUpdates.active = Boolean(body.active);
+      }
+      if (body.phone !== undefined) {
+        profileUpdates.phone = body.phone;
       }
 
       if (Object.keys(profileUpdates).length > 0) {
@@ -127,7 +124,6 @@ serve(async (req) => {
         }
       }
 
-      // Update role if provided
       if (body.role) {
         if (!VALID_ROLES.includes(body.role)) {
           return new Response(JSON.stringify({ error: "Invalid role" }), {
@@ -135,14 +131,12 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        // Only admins can promote to manager
         if (body.role === "manager" && callerRole.role !== "admin") {
           return new Response(JSON.stringify({ error: "Only admins can promote to manager" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        // Only admins can promote to admin
         if (body.role === "admin" && callerRole.role !== "admin") {
           return new Response(JSON.stringify({ error: "Only admins can promote to admin" }), {
             status: 403,
@@ -162,9 +156,8 @@ serve(async (req) => {
         }
       }
 
-      // Update password if provided
       if (body.password && typeof body.password === "string" && body.password.trim().length > 0) {
-        if (typeof body.password !== "string" || body.password.length < 8 || body.password.length > 128) {
+        if (body.password.length < 8 || body.password.length > 128) {
           return new Response(JSON.stringify({ error: "Password must be 8-128 characters" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -182,11 +175,8 @@ serve(async (req) => {
         }
       }
 
-      // Update locations if provided
       if (body.location_ids && Array.isArray(body.location_ids)) {
-        // Remove existing locations
         await adminClient.from("user_locations").delete().eq("user_id", body.user_id);
-        // Insert new ones
         const locationRows = body.location_ids
           .filter((id: string) => UUID_REGEX.test(id))
           .map((location_id: string) => ({ user_id: body.user_id, location_id }));
@@ -200,8 +190,8 @@ serve(async (req) => {
       });
     }
 
-    // Create user - validate inputs
-    const { email, full_name, password, role, organization_id } = body;
+    // Create user
+    const { email, full_name, password, role, organization_id, phone } = body;
 
     if (!email || !full_name || !password || !role) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -245,7 +235,6 @@ serve(async (req) => {
       });
     }
 
-    // Only admins can create managers
     if (role === "manager" && callerRole.role !== "admin") {
       return new Response(JSON.stringify({ error: "Only admins can create managers" }), {
         status: 403,
@@ -253,7 +242,6 @@ serve(async (req) => {
       });
     }
 
-    // Create user in auth
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
@@ -276,17 +264,21 @@ serve(async (req) => {
       });
     }
 
-    // Update profile with organization
-    if (organization_id && newUser.user) {
-      await adminClient
-        .from("profiles")
-        .update({ organization_id })
-        .eq("user_id", newUser.user.id);
+    // Update profile with organization and phone
+    if (newUser.user) {
+      const profileUpdates: Record<string, any> = {};
+      if (organization_id) profileUpdates.organization_id = organization_id;
+      if (phone) profileUpdates.phone = phone;
+      if (Object.keys(profileUpdates).length > 0) {
+        await adminClient
+          .from("profiles")
+          .update(profileUpdates)
+          .eq("user_id", newUser.user.id);
+      }
     }
 
-    // For kiosk accounts, create the kiosk_accounts record
+    // For kiosk accounts
     if (role === "kiosk" && body.location_id && newUser.user) {
-      // Set the role to kiosk (trigger defaults to worker, so we need to update)
       await adminClient
         .from("user_roles")
         .update({ role: "kiosk" })
@@ -299,7 +291,7 @@ serve(async (req) => {
       });
     }
 
-    // Assign locations if provided
+    // Assign locations
     if (body.location_ids && Array.isArray(body.location_ids) && newUser.user) {
       const locationRows = body.location_ids
         .filter((id: string) => UUID_REGEX.test(id))

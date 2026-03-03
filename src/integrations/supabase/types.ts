@@ -316,6 +316,7 @@ export type Database = {
           full_name: string
           id: string
           organization_id: string | null
+          phone: string | null
           profile_picture: string | null
           unique_key: string | null
           updated_at: string
@@ -329,6 +330,7 @@ export type Database = {
           full_name: string
           id?: string
           organization_id?: string | null
+          phone?: string | null
           profile_picture?: string | null
           unique_key?: string | null
           updated_at?: string
@@ -342,6 +344,7 @@ export type Database = {
           full_name?: string
           id?: string
           organization_id?: string | null
+          phone?: string | null
           profile_picture?: string | null
           unique_key?: string | null
           updated_at?: string
@@ -517,6 +520,7 @@ export type Database = {
     }
     Functions: {
       generate_unique_key: { Args: never; Returns: string }
+      get_email_by_username: { Args: { _username: string }; Returns: string }
       get_user_org: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
