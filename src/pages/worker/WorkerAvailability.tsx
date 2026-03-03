@@ -358,7 +358,7 @@ export default function WorkerAvailability() {
         .from("availability_templates")
         .delete()
         .eq("user_id", user.id)
-        .eq("location_id", selectedLocationId);
+        .eq("name", "My Template");
       const { error } = await (supabase as any).from("availability_templates").insert({
         user_id: user.id,
         name: "My Template",
