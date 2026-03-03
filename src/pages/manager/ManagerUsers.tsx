@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Lock, Unlock, Pencil, Shield, UserX, UserCheck, MapPin } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock, Pencil, UserX, UserCheck, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 interface Location {
@@ -22,6 +22,7 @@ interface Worker {
   user_id: string;
   full_name: string;
   username: string;
+  phone: string | null;
   active: boolean;
   availability_locked: boolean;
   role?: string;
@@ -29,19 +30,29 @@ interface Worker {
 }
 
 export default function ManagerUsers() {
-  const { profile, role: myRole } = useAuth();
+  const { user, profile, role: myRole } = useAuth();
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  // Create dialog
+  const [showCreate, setShowCreate] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Manager password confirmation step
+  const [pendingCreate, setPendingCreate] = useState(false);
+  const [managerPassword, setManagerPassword] = useState("");
+  const [confirmError, setConfirmError] = useState("");
 
   // Edit dialog state
   const [editWorker, setEditWorker] = useState<Worker | null>(null);
   const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editRole, setEditRole] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editActive, setEditActive] = useState(true);
@@ -70,7 +81,6 @@ export default function ManagerUsers() {
     if (locData) setLocations(locData);
     if (!profileData) return;
 
-    // Fetch roles and locations for all workers
     const userIds = profileData.map((p: any) => p.user_id);
     const [{ data: rolesData }, { data: userLocsData }] = await Promise.all([
       supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
@@ -97,18 +107,47 @@ export default function ManagerUsers() {
 
   useEffect(() => { fetchWorkers(); }, [profile]);
 
-  async function handleCreate(e: React.FormEvent) {
+  function resetCreateForm() {
+    setEmail(""); setFullName(""); setPhone(""); setPassword(""); setRole("worker"); setSelectedLocation("");
+    setPendingCreate(false); setManagerPassword(""); setConfirmError("");
+  }
+
+  // Step 1: Fill form and submit -> go to password confirmation
+  function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !fullName.trim() || !password) return;
+    setPendingCreate(true);
+    setConfirmError("");
+    setManagerPassword("");
+  }
+
+  // Step 2: Verify manager password then create
+  async function handleConfirmCreate() {
+    if (!managerPassword) return;
     setCreating(true);
+    setConfirmError("");
+
     try {
+      // Verify manager's password by attempting sign-in
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: user?.email || "",
+        password: managerPassword,
+      });
+      if (authErr) {
+        setConfirmError("Incorrect password");
+        setCreating(false);
+        return;
+      }
+
+      const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, password, role, organization_id: profile?.organization_id, location_ids: selectedLocations },
+        body: { email, full_name: fullName, phone: phone.trim() || null, password, role, organization_id: profile?.organization_id, location_ids: locationIds },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("User created");
-      setEmail(""); setFullName(""); setPassword(""); setSelectedLocations([]);
+      resetCreateForm();
+      setShowCreate(false);
       fetchWorkers();
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
@@ -126,6 +165,7 @@ export default function ManagerUsers() {
   function openEdit(w: Worker) {
     setEditWorker(w);
     setEditName(w.full_name);
+    setEditPhone(w.phone || "");
     setEditRole(w.role || "worker");
     setEditPassword("");
     setEditActive(w.active);
@@ -140,6 +180,7 @@ export default function ManagerUsers() {
         action: "update",
         user_id: editWorker.user_id,
         full_name: editName,
+        phone: editPhone.trim() || null,
         role: editRole,
         active: editActive,
         location_ids: editLocations,
@@ -189,47 +230,12 @@ export default function ManagerUsers() {
 
   return (
     <AppLayout>
-      <h1 className="page-header mb-6">👥 Workers</h1>
-
-      <form onSubmit={handleCreate} className="bg-card border border-border rounded-xl p-6 mb-6 space-y-4">
-        <h2 className="text-lg font-semibold">Add User</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" required />
-          <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" required />
-          <Select value={role} onValueChange={setRole}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="worker">Worker</SelectItem>
-              <SelectItem value="shiftleader">Shift Leader</SelectItem>
-              {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
-            </SelectContent>
-          </Select>
-        </div>
-        {locations.length > 0 && (
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Locations</Label>
-            <div className="flex flex-wrap gap-3">
-              {locations.map((loc) => (
-                <label key={loc.id} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                  <Checkbox
-                    checked={selectedLocations.includes(loc.id)}
-                    onCheckedChange={(checked) => {
-                      setSelectedLocations((prev) =>
-                        checked ? [...prev, loc.id] : prev.filter((id) => id !== loc.id)
-                      );
-                    }}
-                  />
-                  {loc.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-        <Button type="submit" disabled={creating}>
-          <Plus className="w-4 h-4 mr-2" /> {creating ? "Creating..." : "Add User"}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="page-header">👥 Workers</h1>
+        <Button onClick={() => { resetCreateForm(); setShowCreate(true); }}>
+          <Plus className="w-4 h-4 mr-2" /> Add User
         </Button>
-      </form>
+      </div>
 
       <div className="space-y-3">
         {workers.map((w) => (
@@ -259,12 +265,7 @@ export default function ManagerUsers() {
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => toggleLock(w.user_id, w.availability_locked)}
-                title={w.availability_locked ? "Unlock availability" : "Lock availability"}
-              >
+              <Button size="icon" variant="ghost" onClick={() => toggleLock(w.user_id, w.availability_locked)} title={w.availability_locked ? "Unlock availability" : "Lock availability"}>
                 {w.availability_locked ? <Lock className="w-4 h-4 text-warning" /> : <Unlock className="w-4 h-4" />}
               </Button>
               <Button size="icon" variant="ghost" onClick={() => openEdit(w)} title="Edit user">
@@ -279,6 +280,100 @@ export default function ManagerUsers() {
         {workers.length === 0 && <p className="text-muted-foreground text-center py-8">No workers yet.</p>}
       </div>
 
+      {/* Create user dialog */}
+      <Dialog open={showCreate} onOpenChange={(open) => { if (!open) { resetCreateForm(); setShowCreate(false); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{pendingCreate ? "Confirm with your password" : "Add User"}</DialogTitle>
+            <DialogDescription>
+              {pendingCreate
+                ? "Enter your manager password to confirm creating this user."
+                : "Fill in the details to create a new user account."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!pendingCreate ? (
+            <form onSubmit={handleCreateStep1} className="space-y-4 mt-2">
+              <div className="space-y-1.5">
+                <Label>Full Name</Label>
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone Number</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" type="password" required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="worker">Worker</SelectItem>
+                    <SelectItem value="shiftleader">Shift Leader</SelectItem>
+                    {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              {locations.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Location</Label>
+                  <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                    <SelectContent>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button type="submit" className="w-full">
+                <Plus className="w-4 h-4 mr-2" /> Continue
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4 mt-2">
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <p><span className="text-muted-foreground">Name:</span> {fullName}</p>
+                <p><span className="text-muted-foreground">Email:</span> {email}</p>
+                {phone && <p><span className="text-muted-foreground">Phone:</span> {phone}</p>}
+                <p><span className="text-muted-foreground">Role:</span> {role === "shiftleader" ? "Shift Leader" : role}</p>
+                {selectedLocation && (
+                  <p><span className="text-muted-foreground">Location:</span> {locations.find((l) => l.id === selectedLocation)?.name}</p>
+                )}
+              </div>
+              {confirmError && (
+                <div className="bg-destructive/10 text-destructive text-sm rounded-lg px-4 py-2">{confirmError}</div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Your Password</Label>
+                <Input
+                  type="password"
+                  value={managerPassword}
+                  onChange={(e) => setManagerPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") handleConfirmCreate(); }}
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button onClick={handleConfirmCreate} disabled={creating || !managerPassword} className="flex-1">
+                  {creating ? "Creating..." : "Confirm & Create"}
+                </Button>
+                <Button variant="outline" onClick={() => setPendingCreate(false)}>Back</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Edit dialog */}
       <Dialog open={!!editWorker} onOpenChange={(open) => !open && setEditWorker(null)}>
         <DialogContent>
@@ -290,6 +385,10 @@ export default function ManagerUsers() {
             <div className="space-y-1.5">
               <Label>Full Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone Number</Label>
+              <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
@@ -308,12 +407,7 @@ export default function ManagerUsers() {
             </div>
             <div className="flex items-center justify-between">
               <Label>Account Active</Label>
-              <Button
-                type="button"
-                variant={editActive ? "default" : "outline"}
-                size="sm"
-                onClick={() => setEditActive(!editActive)}
-              >
+              <Button type="button" variant={editActive ? "default" : "outline"} size="sm" onClick={() => setEditActive(!editActive)}>
                 {editActive ? <><UserCheck className="w-3.5 h-3.5 mr-1.5" /> Active</> : <><UserX className="w-3.5 h-3.5 mr-1.5" /> Inactive</>}
               </Button>
             </div>
@@ -353,7 +447,7 @@ export default function ManagerUsers() {
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete <strong>{deleteTarget?.full_name}</strong>? This action cannot be undone and will remove all their data.
+              Are you sure you want to permanently delete <strong>{deleteTarget?.full_name}</strong>? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 pt-2">
