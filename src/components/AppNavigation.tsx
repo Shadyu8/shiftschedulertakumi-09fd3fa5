@@ -1,9 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSidebarState } from "@/contexts/SidebarContext";
 import {
   LayoutDashboard, Users, Calendar, Clock, ClipboardList,
   Settings, LogOut, Monitor, FileText, Building2,
-  MapPin, UserCog, User, CheckSquare
+  MapPin, UserCog, User, CheckSquare, PanelLeftClose, PanelLeft
 } from "lucide-react";
 
 interface NavItem {
@@ -51,77 +52,111 @@ const roleNavItems: Record<string, NavItem[]> = {
 export default function AppNavigation() {
   const { profile, role, signOut } = useAuth();
   const location = useLocation();
+  const { sidebarOpen, toggleSidebar } = useSidebarState();
 
   if (!role) return null;
 
   const navItems = roleNavItems[role] || [];
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + "/");
 
-  // Mobile bottom: all nav items + account (compact layout)
-  const mobileItems = [
-    ...navItems,
-    { href: "/account", label: "Account", mobileLabel: "Account", icon: <User className="w-5 h-5" /> },
-  ];
-
   const profilePic = profile?.profile_picture;
 
   return (
     <>
+      {/* Mobile top header */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border px-4 h-12 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-primary" />
+          <span className="font-bold text-foreground text-sm">Shift Planner</span>
+        </Link>
+        <Link to="/account" className="flex items-center gap-2">
+          {profilePic ? (
+            <img src={profilePic} alt="" className="w-8 h-8 rounded-full object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+              <User className="w-4 h-4 text-muted-foreground" />
+            </div>
+          )}
+        </Link>
+      </header>
+
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:flex-col md:w-64 md:min-h-screen bg-sidebar border-r border-sidebar-border fixed left-0 top-0 z-30">
-        {/* Logo */}
-        <div className="px-6 py-5 border-b border-sidebar-border">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
+      <aside
+        className={`hidden md:flex md:flex-col md:min-h-screen bg-sidebar border-r border-sidebar-border fixed left-0 top-0 z-30 transition-all duration-200 ${
+          sidebarOpen ? "md:w-64" : "md:w-16"
+        }`}
+      >
+        {/* Logo + collapse button */}
+        <div className={`py-5 border-b border-sidebar-border flex items-center ${sidebarOpen ? "px-4 justify-between" : "px-2 justify-center flex-col gap-2"}`}>
+          {sidebarOpen ? (
+            <Link to="/" className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5 text-sidebar-primary-foreground" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="font-bold text-sidebar-foreground text-lg leading-tight">Shift Planner</h1>
+                <p className="text-xs text-sidebar-foreground/50 capitalize">{role}</p>
+              </div>
+            </Link>
+          ) : (
+            <Link to="/" className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <Calendar className="w-5 h-5 text-sidebar-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-bold text-sidebar-foreground text-lg leading-tight">Shift Planner</h1>
-              <p className="text-xs text-sidebar-foreground/50 capitalize">{role}</p>
-            </div>
-          </Link>
+            </Link>
+          )}
+          <button
+            onClick={toggleSidebar}
+            className="text-sidebar-foreground/50 hover:text-sidebar-foreground p-1.5 rounded-md hover:bg-sidebar-accent transition-colors shrink-0"
+            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
+          </button>
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto ${sidebarOpen ? "px-3" : "px-2"}`}>
           {navItems.map((item) => (
             <Link
               key={item.href}
               to={item.href}
-              className={`nav-link ${isActive(item.href) ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
+              title={!sidebarOpen ? item.label : undefined}
+              className={`nav-link ${
+                !sidebarOpen ? "justify-center px-2" : ""
+              } ${isActive(item.href) ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <span className="shrink-0">{item.icon}</span>
+              {sidebarOpen && <span>{item.label}</span>}
             </Link>
           ))}
         </nav>
 
-        {/* User section with profile picture */}
-        <div className="px-3 py-4 border-t border-sidebar-border space-y-1">
+        {/* User section */}
+        <div className={`py-4 border-t border-sidebar-border space-y-1 ${sidebarOpen ? "px-3" : "px-2"}`}>
           <Link
             to="/account"
-            className={`nav-link ${isActive("/account") ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
+            title={!sidebarOpen ? (profile?.full_name || "Account") : undefined}
+            className={`nav-link ${!sidebarOpen ? "justify-center px-2" : ""} ${isActive("/account") ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"}`}
           >
             {profilePic ? (
               <img src={profilePic} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
             ) : (
-              <User className="w-5 h-5" />
+              <User className="w-5 h-5 shrink-0" />
             )}
-            <span className="truncate">{profile?.full_name || "Account"}</span>
+            {sidebarOpen && <span className="truncate">{profile?.full_name || "Account"}</span>}
           </Link>
           <button
             onClick={signOut}
-            className="nav-link text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent w-full"
+            title={!sidebarOpen ? "Sign Out" : undefined}
+            className={`nav-link ${!sidebarOpen ? "justify-center px-2" : ""} text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent w-full`}
           >
-            <LogOut className="w-5 h-5" />
-            <span>Sign Out</span>
+            <LogOut className="w-5 h-5 shrink-0" />
+            {sidebarOpen && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
-      {/* Mobile bottom navigation — all items */}
+      {/* Mobile bottom navigation — no account (moved to top) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 py-1 flex justify-around overflow-x-auto">
-        {mobileItems.map((item) => (
+        {navItems.map((item) => (
           <Link
             key={item.href}
             to={item.href}
@@ -129,11 +164,7 @@ export default function AppNavigation() {
               isActive(item.href) ? "text-primary" : "text-muted-foreground"
             }`}
           >
-            {item.href === "/account" && profilePic ? (
-              <img src={profilePic} alt="" className="w-5 h-5 rounded-full object-cover" />
-            ) : (
-              item.icon
-            )}
+            {item.icon}
             <span className="truncate max-w-[48px]">{item.mobileLabel || item.label}</span>
           </Link>
         ))}
