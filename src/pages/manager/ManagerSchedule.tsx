@@ -1041,7 +1041,7 @@ export default function ManagerSchedule() {
                     onDrop={(e) => handleRowDrop(e, ua.userId)}
                     className={`border-b border-border ${rowIdx % 2 === 0 ? "bg-card" : "bg-muted/20"} hover:bg-primary/5 ${dragOverRowUserId === ua.userId ? "ring-2 ring-inset ring-primary/40" : ""}`}
                   >
-                    <td className="sticky left-0 z-10 bg-inherit px-2 py-1 border-r border-border">
+                    <td className={`sticky left-0 z-10 px-2 py-1 border-r border-border ${rowIdx % 2 === 0 ? "bg-card" : "bg-background"}`}>
                       <div className="flex items-center gap-1 min-w-0">
                         <span className="text-muted-foreground text-xs cursor-grab select-none shrink-0" title="Drag to reorder">⠿</span>
                         <span className="font-medium text-foreground text-xs truncate">{ua.fullName}</span>
@@ -1127,7 +1127,7 @@ export default function ManagerSchedule() {
                     const workerName = extraShifts.find((s) => s.user_id === userId)?.profile?.full_name ?? "Unknown";
                     return (
                       <tr key={userId} className="border-b border-border bg-card hover:bg-primary/5">
-                        <td className="sticky left-0 z-10 bg-inherit px-2 py-1 border-r border-border">
+                        <td className="sticky left-0 z-10 bg-card px-2 py-1 border-r border-border">
                           <span className="font-medium text-foreground text-xs">{workerName}</span>
                         </td>
                         {days.map((day) => {
