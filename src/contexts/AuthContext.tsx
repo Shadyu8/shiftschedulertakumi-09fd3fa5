@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -33,28 +33,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchProfileAndRole(userId: string) {
-    const [profileRes, roleRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).single(),
-      supabase.from("user_roles").select("role").eq("user_id", userId).single(),
-    ]);
-    if (profileRes.data) setProfile(profileRes.data as Profile);
-    if (roleRes.data) setRole(roleRes.data.role as AppRole);
-  }
+  const fetchProfileAndRole = useCallback(async (userId: string) => {
+    try {
+      const [profileRes, roleRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", userId).single(),
+        supabase.from("user_roles").select("role").eq("user_id", userId).single(),
+      ]);
+      if (profileRes.data) setProfile(profileRes.data as Profile);
+      if (roleRes.data) setRole(roleRes.data.role as AppRole);
+    } catch (err) {
+      console.error("Failed to fetch profile/role, retrying...", err);
+      // Retry once after a short delay
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        const [profileRes, roleRes] = await Promise.all([
+          supabase.from("profiles").select("*").eq("user_id", userId).single(),
+          supabase.from("user_roles").select("role").eq("user_id", userId).single(),
+        ]);
+        if (profileRes.data) setProfile(profileRes.data as Profile);
+        if (roleRes.data) setRole(roleRes.data.role as AppRole);
+      } catch {
+        console.error("Retry also failed");
+      }
+    }
+  }, []);
 
   useEffect(() => {
-    let initialSessionHandled = false;
-
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
           setUser(session.user);
-          // Avoid refetching if initial getSession already handled this
-          if (!initialSessionHandled) {
-            initialSessionHandled = true;
-            return;
-          }
-          await fetchProfileAndRole(session.user.id);
+          // Use setTimeout to avoid potential deadlock with Supabase client
+          setTimeout(() => fetchProfileAndRole(session.user.id), 0);
         } else {
           setUser(null);
           setProfile(null);
@@ -64,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+    // Then check for existing session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      initialSessionHandled = true;
       if (session?.user) {
         setUser(session.user);
         await fetchProfileAndRole(session.user.id);
@@ -73,8 +84,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    // Set up a visibility change listener to refresh session when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) {
+            setUser(session.user);
+            // Refresh profile data on tab focus
+            fetchProfileAndRole(session.user.id);
+          }
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchProfileAndRole]);
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
