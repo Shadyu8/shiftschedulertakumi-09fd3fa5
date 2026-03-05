@@ -66,8 +66,8 @@ export default function AppNavigation() {
       {/* Mobile top header */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border px-4 h-12 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-primary" />
-          <span className="font-bold text-foreground text-sm">Shift Planner</span>
+          <img src="/icon.png" alt="Logo" className="w-5 h-5 object-contain" />
+          <span className="font-bold text-foreground text-sm">Spike's Planner</span>
         </Link>
         <Link to="/account" className="flex items-center gap-2">
           {profilePic ? (
@@ -90,17 +90,17 @@ export default function AppNavigation() {
         <div className={`py-5 border-b border-sidebar-border flex items-center ${sidebarOpen ? "px-4 justify-between" : "px-2 justify-center flex-col gap-2"}`}>
           {sidebarOpen ? (
             <Link to="/" className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-                <Calendar className="w-5 h-5 text-sidebar-primary-foreground" />
+              <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0 overflow-hidden">
+                <img src="/icon.png" alt="Logo" className="w-7 h-7 object-contain" />
               </div>
               <div className="min-w-0">
-                <h1 className="font-bold text-sidebar-foreground text-lg leading-tight">Shift Planner</h1>
+                <h1 className="font-bold text-sidebar-foreground text-lg leading-tight">Spike's Planner</h1>
                 <p className="text-xs text-sidebar-foreground/50 capitalize">{role}</p>
               </div>
             </Link>
           ) : (
-            <Link to="/" className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-sidebar-primary-foreground" />
+            <Link to="/" className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
+              <img src="/icon.png" alt="Logo" className="w-7 h-7 object-contain" />
             </Link>
           )}
           <button
