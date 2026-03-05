@@ -64,7 +64,7 @@ export default function AppNavigation() {
   return (
     <>
       {/* Mobile top header */}
-      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border px-4 h-12 flex items-center justify-between">
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 bg-card border-b border-border px-4 flex items-center justify-between" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3rem + env(safe-area-inset-top))' }}>
         <Link to="/" className="flex items-center gap-2">
           <img src="/icon.png" alt="Logo" className="w-5 h-5 object-contain" />
           <span className="font-bold text-foreground text-sm">Spike's Planner</span>
@@ -155,7 +155,7 @@ export default function AppNavigation() {
       </aside>
 
       {/* Mobile bottom navigation — no account (moved to top) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 py-1 flex justify-around overflow-x-auto">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 pt-1 flex justify-around overflow-x-auto" style={{ paddingBottom: 'calc(0.25rem + env(safe-area-inset-bottom))' }}>
         {navItems.map((item) => (
           <Link
             key={item.href}
