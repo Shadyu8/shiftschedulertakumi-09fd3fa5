@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { User, Camera, Loader2, Pencil, X, Check } from "lucide-react";
 
 export default function AccountPage() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, refreshProfile } = useAuth();
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [newPassword, setNewPassword] = useState("");
@@ -66,6 +66,7 @@ export default function AccountPage() {
       toast.error(updateError.message);
     } else {
       setProfilePicUrl(publicUrl);
+      await refreshProfile();
       toast.success("Profile picture updated");
     }
     setUploadingPicture(false);
@@ -78,6 +79,7 @@ export default function AccountPage() {
       full_name: fullName,
     }).eq("user_id", user.id);
     if (error) { toast.error(error.message); setSaving(false); return; }
+    await refreshProfile();
     toast.success("Profile updated");
     setSaving(false);
     setEditing(false);
