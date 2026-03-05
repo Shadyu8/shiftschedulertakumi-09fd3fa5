@@ -584,9 +584,8 @@ The kiosk mode is a fullscreen PIN-based punch clock terminal designed for share
 - Kiosk-role accounts fully sign out when exiting
 
 **Time Rounding Rules (Clock In):**
-- Quarter-hour rounding with a 7-minute boundary
-- If punching in early (before shift start), the punch is recorded at the shift start time
-- Times are rounded to the nearest 15-minute increment
+- Times are rounded to the nearest 15-minute increment using a 7-minute boundary (e.g., 14:06 → 14:00, 14:08 → 14:15)
+- **Early punch-in override:** If the rounded time is before the shift start time, the punch is recorded at the shift start time instead (i.e., shift start time takes priority over rounding)
 
 ---
 
@@ -656,7 +655,7 @@ profiles
 ├── organization_id (UUID → organizations.id)
 ├── active (boolean, default true)
 ├── availability_locked (boolean, default false)
-├── unique_key (text, 5-digit PIN for kiosk)
+├── unique_key (text, 5-digit PIN for kiosk — consider hashing for security in production)
 └── created_at (timestamp)
 
 user_roles
@@ -700,7 +699,7 @@ availability
 ├── available (boolean)
 ├── start_time (time, optional)
 ├── end_time (time, optional)
-├── preset (text: ALL_DAY, UNTIL_16:00, FROM_13:00, CUSTOM, UNAVAILABLE, etc.)
+├── preset (text — one of: ALL_DAY, UNTIL_16:00, UNTIL_17:00, FROM_13:00, FROM_14:00, FROM_15:00, FROM_16:00, FROM_17:00, UNAVAILABLE, CUSTOM)
 ├── location_id (UUID → locations.id)
 └── created_at (timestamp)
 
