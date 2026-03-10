@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { format, addDays, startOfWeek } from "date-fns";
+import { format, addDays, startOfWeek, getDay } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface Shift {
@@ -19,6 +19,8 @@ interface Shift {
   standby: boolean;
   profile_name?: string;
   profile_picture?: string | null;
+  staff_type?: string;
+  is_fulltimer?: boolean;
 }
 
 interface Location {
@@ -27,6 +29,11 @@ interface Location {
 }
 
 type ViewMode = "day" | "week";
+
+function getDayOfWeek(date: Date): number {
+  const d = getDay(date);
+  return d === 0 ? 6 : d - 1;
+}
 
 export default function ShiftSchedulePage() {
   const { user, role } = useAuth();
@@ -115,7 +122,7 @@ export default function ShiftSchedulePage() {
     fetchLocations();
   }, [user, role]);
 
-  // Fetch shifts for the week containing selectedDate
+  // Fetch shifts + fulltimer schedules for the week containing selectedDate
   useEffect(() => {
     if (!selectedLoc) return;
     setLoading(true);
@@ -123,37 +130,85 @@ export default function ShiftSchedulePage() {
     const weekStartStr = format(ws, "yyyy-MM-dd");
     const weekEndStr = format(addDays(ws, 6), "yyyy-MM-dd");
 
-    supabase
-      .from("shifts")
-      .select("*")
-      .eq("location_id", selectedLoc)
-      .eq("published", true)
-      .gte("date", weekStartStr)
-      .lte("date", weekEndStr)
-      .order("date")
-      .order("start_time")
-      .then(async ({ data }) => {
-        if (data && data.length > 0) {
-          const userIds = [...new Set(data.map((s: any) => s.user_id))];
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, full_name, profile_picture")
-            .in("user_id", userIds);
-          const profileMap = new Map(
-            (profiles || []).map((p: any) => [p.user_id, p])
-          );
-          setShifts(
-            data.map((s: any) => ({
-              ...s,
-              profile_name: profileMap.get(s.user_id)?.full_name,
-              profile_picture: profileMap.get(s.user_id)?.profile_picture,
-            })) as Shift[]
-          );
-        } else {
-          setShifts([]);
+    Promise.all([
+      supabase
+        .from("shifts")
+        .select("*")
+        .eq("location_id", selectedLoc)
+        .eq("published", true)
+        .gte("date", weekStartStr)
+        .lte("date", weekEndStr)
+        .order("date")
+        .order("start_time"),
+      supabase
+        .from("fulltimer_schedules")
+        .select("user_id, day_of_week, start_time, end_time")
+        .eq("location_id", selectedLoc),
+    ]).then(async ([shiftsRes, ftRes]) => {
+      const realShifts = shiftsRes.data || [];
+      const ftSchedules = ftRes.data || [];
+
+      // Get all user IDs (from real shifts + fulltimer schedules)
+      const allUserIds = [...new Set([
+        ...realShifts.map((s: any) => s.user_id),
+        ...ftSchedules.map((f: any) => f.user_id),
+      ])];
+
+      // Fetch profiles + roles
+      const [profilesRes, rolesRes] = await Promise.all([
+        allUserIds.length > 0
+          ? supabase.from("profiles").select("user_id, full_name, profile_picture, staff_type").in("user_id", allUserIds)
+          : Promise.resolve({ data: [] }),
+        allUserIds.length > 0
+          ? supabase.from("user_roles").select("user_id, role").in("user_id", allUserIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const profileMap = new Map(
+        ((profilesRes.data || []) as any[]).map((p) => [p.user_id, p])
+      );
+      const roleMap = new Map(
+        ((rolesRes.data || []) as any[]).map((r) => [r.user_id, r.role])
+      );
+
+      // Build real shifts with profile data
+      const mappedShifts: Shift[] = realShifts.map((s: any) => ({
+        ...s,
+        profile_name: profileMap.get(s.user_id)?.full_name,
+        profile_picture: profileMap.get(s.user_id)?.profile_picture,
+        staff_type: profileMap.get(s.user_id)?.staff_type || "floor",
+        is_fulltimer: roleMap.get(s.user_id) === "fulltimer",
+      }));
+
+      // Generate virtual fulltimer shifts
+      const weekDays = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+      const virtualShifts: Shift[] = [];
+      for (const ft of ftSchedules as any[]) {
+        if (roleMap.get(ft.user_id) !== "fulltimer") continue;
+        for (const day of weekDays) {
+          const dow = getDayOfWeek(day);
+          if (dow !== ft.day_of_week) continue;
+          const dateStr = format(day, "yyyy-MM-dd");
+          // Skip if real shift exists
+          if (mappedShifts.some((s) => s.user_id === ft.user_id && s.date === dateStr)) continue;
+          virtualShifts.push({
+            id: `ft-${ft.user_id}-${dateStr}`,
+            user_id: ft.user_id,
+            date: dateStr,
+            start_time: ft.start_time,
+            end_time: ft.end_time,
+            standby: false,
+            profile_name: profileMap.get(ft.user_id)?.full_name,
+            profile_picture: profileMap.get(ft.user_id)?.profile_picture,
+            staff_type: profileMap.get(ft.user_id)?.staff_type || "floor",
+            is_fulltimer: true,
+          });
         }
-        setLoading(false);
-      });
+      }
+
+      setShifts([...mappedShifts, ...virtualShifts]);
+      setLoading(false);
+    });
   }, [selectedLoc, selectedDate]);
 
   const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -164,6 +219,10 @@ export default function ShiftSchedulePage() {
   const dayShifts = shifts
     .filter((s) => s.date === dateStr)
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+  // Group by staff type
+  const floorShifts = dayShifts.filter((s) => s.staff_type !== "kitchen");
+  const kitchenShifts = dayShifts.filter((s) => s.staff_type === "kitchen");
 
   function prevPeriod() {
     setSelectedDate((d) => addDays(d, viewMode === "day" ? -7 : -7));
@@ -209,12 +268,57 @@ export default function ShiftSchedulePage() {
             {s.start_time}{s.end_time ? ` – ${s.end_time}` : ""}
           </span>
         </div>
-        {s.standby && (
-          <span className="bg-warning/10 text-warning text-xs px-2.5 py-1 rounded-full font-medium shrink-0">
-            Standby
-          </span>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {s.standby && (
+            <span className="bg-warning/10 text-warning text-xs px-2.5 py-1 rounded-full font-medium">
+              Standby
+            </span>
+          )}
+          {s.is_fulltimer && (
+            <span className="bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full font-medium">
+              FT
+            </span>
+          )}
+        </div>
       </button>
+    );
+  }
+
+  function renderGroupedDayView() {
+    const hasFloor = floorShifts.length > 0;
+    const hasKitchen = kitchenShifts.length > 0;
+
+    if (!hasFloor && !hasKitchen) {
+      return (
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+          <p className="text-muted-foreground text-sm">No shifts scheduled for this day.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {hasFloor && (
+          <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+              🏠 Floor Staff
+            </h3>
+            <div className="space-y-2.5">
+              {floorShifts.map(renderShiftCard)}
+            </div>
+          </div>
+        )}
+        {hasKitchen && (
+          <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+              🍳 Kitchen Staff
+            </h3>
+            <div className="space-y-2.5">
+              {kitchenShifts.map(renderShiftCard)}
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -227,6 +331,9 @@ export default function ShiftSchedulePage() {
             .filter((s) => s.date === dayStr)
             .sort((a, b) => a.start_time.localeCompare(b.start_time));
           const isToday = format(new Date(), "yyyy-MM-dd") === dayStr;
+
+          const dayFloor = dayS.filter((s) => s.staff_type !== "kitchen");
+          const dayKitchen = dayS.filter((s) => s.staff_type === "kitchen");
 
           return (
             <div
@@ -246,32 +353,52 @@ export default function ShiftSchedulePage() {
               {dayS.length === 0 ? (
                 <p className="text-muted-foreground text-xs">No shifts</p>
               ) : (
-                <div className="space-y-1.5">
-                  {dayS.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedShift(s)}
-                      className={`w-full text-left px-2 py-2 rounded-lg text-xs border transition-colors active:scale-[0.98] ${
-                        s.user_id === user?.id
-                          ? "bg-primary/10 border-primary/20"
-                          : "bg-muted/50 border-border"
-                      }`}
-                    >
-                      <div className="font-medium text-primary">
-                        {s.start_time} – {s.end_time}
+                <div className="space-y-2">
+                  {dayFloor.length > 0 && (
+                    <div>
+                      <p className="text-[9px] text-muted-foreground font-semibold uppercase mb-0.5">🏠 Floor</p>
+                      <div className="space-y-1">
+                        {dayFloor.map((s) => renderWeekShiftCard(s))}
                       </div>
-                      <div className="text-foreground truncate">
-                        {s.profile_name || "Unknown"}
-                        {s.standby && <span className="text-warning ml-1">(S)</span>}
+                    </div>
+                  )}
+                  {dayKitchen.length > 0 && (
+                    <div>
+                      <p className="text-[9px] text-muted-foreground font-semibold uppercase mb-0.5">🍳 Kitchen</p>
+                      <div className="space-y-1">
+                        {dayKitchen.map((s) => renderWeekShiftCard(s))}
                       </div>
-                    </button>
-                  ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+    );
+  }
+
+  function renderWeekShiftCard(s: Shift) {
+    return (
+      <button
+        key={s.id}
+        onClick={() => setSelectedShift(s)}
+        className={`w-full text-left px-2 py-2 rounded-lg text-xs border transition-colors active:scale-[0.98] ${
+          s.user_id === user?.id
+            ? "bg-primary/10 border-primary/20"
+            : "bg-muted/50 border-border"
+        }`}
+      >
+        <div className="font-medium text-primary">
+          {s.start_time} – {s.end_time}
+        </div>
+        <div className="text-foreground truncate">
+          {s.profile_name || "Unknown"}
+          {s.standby && <span className="text-warning ml-1">(S)</span>}
+          {s.is_fulltimer && <span className="text-primary ml-1">(FT)</span>}
+        </div>
+      </button>
     );
   }
 
@@ -361,19 +488,7 @@ export default function ShiftSchedulePage() {
           onTouchEnd={handleTouchEnd}
           className="touch-pan-y"
         >
-          {viewMode === "day" ? (
-            <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-              {dayShifts.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No shifts scheduled for this day.</p>
-              ) : (
-                <div className="space-y-2.5">
-                  {dayShifts.map(renderShiftCard)}
-                </div>
-              )}
-            </div>
-          ) : (
-            renderWeekView()
-          )}
+          {viewMode === "day" ? renderGroupedDayView() : renderWeekView()}
         </div>
       )}
 
@@ -398,6 +513,14 @@ export default function ShiftSchedulePage() {
                 <p className="text-muted-foreground text-sm mt-1">
                   {format(new Date(selectedShift.date + "T00:00:00"), "EEE, dd MMM yyyy")}
                 </p>
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <span className="text-xs text-muted-foreground capitalize">
+                    {selectedShift.staff_type === "kitchen" ? "🍳 Kitchen" : "🏠 Floor"}
+                  </span>
+                  {selectedShift.is_fulltimer && (
+                    <span className="text-xs text-primary font-medium">Fulltimer</span>
+                  )}
+                </div>
               </div>
               <div className="bg-muted/50 rounded-xl px-6 py-3 text-center">
                 <p className="text-2xl font-bold text-primary">
