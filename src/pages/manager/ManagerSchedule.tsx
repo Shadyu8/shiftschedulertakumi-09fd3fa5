@@ -645,7 +645,7 @@ export default function ManagerSchedule() {
   const selectedDow = getDayOfWeek(selectedDay);
   // Show all workers for the selected day (available ones first, then others)
   const selectedAllWorkers = orderedAvailabilities;
-  const selectedDayShifts = shifts.filter((s) => s.date === selectedDateStr);
+  const selectedDayShifts = allShiftsForDisplay.filter((s) => s.date === selectedDateStr);
 
   // Workers for add modal
   const addWorkerModalDow = addWorkerModal ? getDayOfWeek(new Date(addWorkerModal.date + "T12:00:00")) : null;
