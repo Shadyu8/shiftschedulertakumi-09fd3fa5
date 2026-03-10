@@ -22,12 +22,21 @@ interface ShiftEntry {
   published: boolean;
   standby: boolean;
   profile?: { full_name: string };
+  is_fulltimer_auto?: boolean; // virtual flag for display
 }
 
 interface Worker {
   user_id: string;
   full_name: string;
   role?: string;
+  staff_type?: string;
+}
+
+interface FulltimerScheduleEntry {
+  user_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
 }
 
 interface Location {
