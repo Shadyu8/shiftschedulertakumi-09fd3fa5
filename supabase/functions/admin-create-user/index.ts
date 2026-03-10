@@ -109,6 +109,9 @@ serve(async (req) => {
       if (body.phone !== undefined) {
         profileUpdates.phone = body.phone;
       }
+      if (body.staff_type !== undefined) {
+        profileUpdates.staff_type = body.staff_type;
+      }
 
       if (Object.keys(profileUpdates).length > 0) {
         const { error: profileError } = await adminClient
