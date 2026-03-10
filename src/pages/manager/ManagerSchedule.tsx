@@ -260,8 +260,9 @@ export default function ManagerSchedule() {
           })
           .map((uid) => ({
             user_id: uid,
-            full_name: profileMap.get(uid) ?? "Unknown",
+            full_name: profileMap.get(uid)?.full_name ?? "Unknown",
             role: roleMap.get(uid),
+            staff_type: profileMap.get(uid)?.staff_type ?? "floor",
           }));
         console.log("[ScheduleBuilder] filtered workers:", filtered);
         setWorkers(filtered);
