@@ -1119,6 +1119,18 @@ export default function ManagerSchedule() {
                         >
                           <div className="space-y-0.5 min-h-[36px]">
                             {workerShifts.map((s) => {
+                              if (s.is_fulltimer_auto) {
+                                return (
+                                  <div key={s.id} className="rounded px-1 py-1 bg-primary/10 border border-primary/20 text-xs">
+                                    <div className="flex gap-0.5 items-center text-primary font-medium">
+                                      <span>{s.start_time}</span>
+                                      <span className="text-muted-foreground">–</span>
+                                      <span>{s.end_time}</span>
+                                    </div>
+                                    <span className="text-[9px] text-muted-foreground">Fulltimer</span>
+                                  </div>
+                                );
+                              }
                               const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                               return (
                                 <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
