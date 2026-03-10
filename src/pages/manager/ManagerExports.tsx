@@ -59,14 +59,8 @@ export default function ManagerExports() {
         if (data) setLocations(new Map(data.map((l) => [l.id, l.name])));
       });
   }, [profile]);
-    supabase
-      .from("locations")
-      .select("id, name")
-      .eq("organization_id", profile.organization_id)
-      .then(({ data }) => {
-        if (data) setLocations(new Map(data.map((l) => [l.id, l.name])));
-      });
-  }, [profile]);
+
+
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
