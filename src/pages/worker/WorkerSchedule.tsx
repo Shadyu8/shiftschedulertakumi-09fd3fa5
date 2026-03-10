@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
-import { format, startOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, addDays, getDay } from "date-fns";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 interface Shift {
@@ -14,17 +14,16 @@ interface Shift {
   published: boolean;
   standby: boolean;
   locations?: { name: string };
+  is_fulltimer?: boolean;
 }
 
-function calcHours(start: string, end: string) {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const diff = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  return diff > 0 ? diff : 0;
+function getDayOfWeek(date: Date): number {
+  const d = getDay(date);
+  return d === 0 ? 6 : d - 1;
 }
 
 export default function WorkerSchedule() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -38,26 +37,64 @@ export default function WorkerSchedule() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("shifts")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("published", true)
-      .gte("date", weekStartStr)
-      .lte("date", weekEndStr)
-      .order("date")
-      .order("start_time")
-      .then(async ({ data }) => {
-        if (data && data.length > 0) {
-          const locIds = [...new Set(data.map((s: any) => s.location_id))];
-          const { data: locs } = await supabase.from("locations").select("id, name").in("id", locIds);
-          const locMap = new Map((locs || []).map((l: any) => [l.id, l]));
-          setShifts(data.map((s: any) => ({ ...s, locations: locMap.get(s.location_id) })) as Shift[]);
-        } else {
-          setShifts([]);
+
+    async function fetchSchedule() {
+      // Fetch real shifts
+      const { data: realShifts } = await supabase
+        .from("shifts")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("published", true)
+        .gte("date", weekStartStr)
+        .lte("date", weekEndStr)
+        .order("date")
+        .order("start_time");
+
+      let mappedShifts: Shift[] = [];
+      if (realShifts && realShifts.length > 0) {
+        const locIds = [...new Set(realShifts.map((s: any) => s.location_id))];
+        const { data: locs } = await supabase.from("locations").select("id, name").in("id", locIds);
+        const locMap = new Map((locs || []).map((l: any) => [l.id, l]));
+        mappedShifts = realShifts.map((s: any) => ({ ...s, locations: locMap.get(s.location_id) })) as Shift[];
+      }
+
+      // For fulltimers, also fetch recurring schedule
+      if (role === "fulltimer") {
+        const { data: ftSchedules } = await supabase
+          .from("fulltimer_schedules")
+          .select("*, locations:location_id(name)")
+          .eq("user_id", user!.id);
+
+        if (ftSchedules) {
+          const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+          for (const ft of ftSchedules as any[]) {
+            for (const day of weekDays) {
+              const dow = getDayOfWeek(day);
+              if (dow !== ft.day_of_week) continue;
+              const dateStr = format(day, "yyyy-MM-dd");
+              if (mappedShifts.some((s) => s.date === dateStr)) continue;
+              mappedShifts.push({
+                id: `ft-${ft.id}-${dateStr}`,
+                date: dateStr,
+                start_time: ft.start_time,
+                end_time: ft.end_time,
+                published: true,
+                standby: false,
+                locations: ft.locations,
+                is_fulltimer: true,
+              });
+            }
+          }
         }
-      });
-  }, [user, weekStartStr, weekEndStr]);
+      }
+
+      // Sort by date, then start_time
+      mappedShifts.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+      setShifts(mappedShifts);
+    }
+
+    fetchSchedule();
+  }, [user, role, weekStartStr, weekEndStr]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(weekStart, i);
@@ -65,8 +102,6 @@ export default function WorkerSchedule() {
   });
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
-
-  
 
   return (
     <AppLayout>
@@ -89,7 +124,6 @@ export default function WorkerSchedule() {
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>
-
 
       {/* Day cards */}
       <div className="space-y-3">
@@ -122,35 +156,40 @@ export default function WorkerSchedule() {
               <div className="flex-1 min-w-0">
                 {dayShifts.length > 0 ? (
                   <div className="space-y-2">
-                    {dayShifts.map((s) => {
-                      return (
-                        <div
-                          key={s.id}
-                          className={`rounded-2xl border px-4 py-3 ${
-                            s.standby
-                              ? "bg-warning/5 border-warning/20"
+                    {dayShifts.map((s) => (
+                      <div
+                        key={s.id}
+                        className={`rounded-2xl border px-4 py-3 ${
+                          s.standby
+                            ? "bg-warning/5 border-warning/20"
+                            : s.is_fulltimer
+                              ? "bg-primary/5 border-primary/20"
                               : "bg-card border-border"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-lg font-bold text-foreground">
-                              {s.start_time} – {s.end_time}
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-lg font-bold text-foreground">
+                            {s.start_time} – {s.end_time}
+                          </span>
+                          {s.standby && (
+                            <span className="bg-warning/10 text-warning text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                              Standby
                             </span>
-                            {s.standby && (
-                              <span className="bg-warning/10 text-warning text-xs px-2.5 py-0.5 rounded-full font-semibold">
-                                Standby
-                              </span>
-                            )}
-                          </div>
-                          {s.locations && (
-                            <div className="flex items-center gap-1.5 text-muted-foreground text-xs mt-1">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              <span>{s.locations.name}</span>
-                            </div>
+                          )}
+                          {s.is_fulltimer && (
+                            <span className="bg-primary/10 text-primary text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                              Fulltimer
+                            </span>
                           )}
                         </div>
-                      );
-                    })}
+                        {s.locations && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground text-xs mt-1">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span>{s.locations.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex items-center h-full">
