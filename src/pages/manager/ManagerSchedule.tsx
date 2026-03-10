@@ -947,7 +947,7 @@ export default function ManagerSchedule() {
                 const avail = ua.availability[dow];
                 return avail && avail.available && avail.preset !== "UNAVAILABLE";
               });
-              const dayShifts = shifts.filter((s) => s.date === dateStr);
+              const dayShifts = allShiftsForDisplay.filter((s) => s.date === dateStr);
               const isDropTarget = dragOverDate === dateStr;
 
               return (
