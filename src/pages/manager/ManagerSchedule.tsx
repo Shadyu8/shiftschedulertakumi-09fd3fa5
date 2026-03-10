@@ -154,6 +154,7 @@ export default function ManagerSchedule() {
   const [shifts, setShifts] = useState<ShiftEntry[]>([]);
   const [availabilities, setAvailabilities] = useState<UserAvailability[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [fulltimerSchedules, setFulltimerSchedules] = useState<FulltimerScheduleEntry[]>([]);
   const [locationSettings, setLocationSettings] = useState<LocationSettings>({
     time_entry_mode: "QUARTER_HOUR_ONLY",
     time_entry_increment_mins: 15,
