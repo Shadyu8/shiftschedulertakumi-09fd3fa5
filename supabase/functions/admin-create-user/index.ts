@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const VALID_ROLES = ["admin", "manager", "shiftleader", "worker", "kiosk"];
+const VALID_ROLES = ["admin", "manager", "shiftleader", "worker", "kiosk", "fulltimer"];
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -108,6 +108,9 @@ serve(async (req) => {
       }
       if (body.phone !== undefined) {
         profileUpdates.phone = body.phone;
+      }
+      if (body.staff_type !== undefined) {
+        profileUpdates.staff_type = body.staff_type;
       }
 
       if (Object.keys(profileUpdates).length > 0) {
@@ -264,11 +267,12 @@ serve(async (req) => {
       });
     }
 
-    // Update profile with organization and phone
+    // Update profile with organization, phone, and staff_type
     if (newUser.user) {
       const profileUpdates: Record<string, any> = {};
       if (organization_id) profileUpdates.organization_id = organization_id;
       if (phone) profileUpdates.phone = phone;
+      if (body.staff_type) profileUpdates.staff_type = body.staff_type;
       if (Object.keys(profileUpdates).length > 0) {
         await adminClient
           .from("profiles")

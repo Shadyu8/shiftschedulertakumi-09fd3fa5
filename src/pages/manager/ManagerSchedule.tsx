@@ -22,12 +22,21 @@ interface ShiftEntry {
   published: boolean;
   standby: boolean;
   profile?: { full_name: string };
+  is_fulltimer_auto?: boolean; // virtual flag for display
 }
 
 interface Worker {
   user_id: string;
   full_name: string;
   role?: string;
+  staff_type?: string;
+}
+
+interface FulltimerScheduleEntry {
+  user_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
 }
 
 interface Location {
@@ -145,6 +154,7 @@ export default function ManagerSchedule() {
   const [shifts, setShifts] = useState<ShiftEntry[]>([]);
   const [availabilities, setAvailabilities] = useState<UserAvailability[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
+  const [fulltimerSchedules, setFulltimerSchedules] = useState<FulltimerScheduleEntry[]>([]);
   const [locationSettings, setLocationSettings] = useState<LocationSettings>({
     time_entry_mode: "QUARTER_HOUR_ONLY",
     time_entry_increment_mins: 15,
@@ -237,27 +247,40 @@ export default function ManagerSchedule() {
         console.log("[ScheduleBuilder] userIds from location:", userIds);
         // Fetch profiles and roles in parallel
         const [profilesRes, rolesRes] = await Promise.all([
-          supabase.from("profiles").select("user_id, full_name").in("user_id", userIds),
+          supabase.from("profiles").select("user_id, full_name, staff_type").in("user_id", userIds),
           supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
         ]);
         console.log("[ScheduleBuilder] profiles:", profilesRes.data, "error:", profilesRes.error);
         console.log("[ScheduleBuilder] roles:", rolesRes.data, "error:", rolesRes.error);
-        const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.user_id, p.full_name]));
+        const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.user_id, { full_name: p.full_name, staff_type: p.staff_type }]));
         const roleMap = new Map((rolesRes.data || []).map((r: any) => [r.user_id, r.role]));
         const filtered: Worker[] = userIds
           .filter((uid) => {
             const r = roleMap.get(uid);
-            return r === "worker" || r === "shiftleader";
+            return r === "worker" || r === "shiftleader" || r === "fulltimer";
           })
           .map((uid) => ({
             user_id: uid,
-            full_name: profileMap.get(uid) ?? "Unknown",
+            full_name: profileMap.get(uid)?.full_name ?? "Unknown",
             role: roleMap.get(uid),
+            staff_type: profileMap.get(uid)?.staff_type ?? "floor",
           }));
         console.log("[ScheduleBuilder] filtered workers:", filtered);
         setWorkers(filtered);
       });
   }, [locationId, profile]);
+
+  // Fetch fulltimer schedules for this location
+  useEffect(() => {
+    if (!locationId) return;
+    supabase
+      .from("fulltimer_schedules")
+      .select("user_id, day_of_week, start_time, end_time")
+      .eq("location_id", locationId)
+      .then(({ data }) => {
+        setFulltimerSchedules((data || []) as FulltimerScheduleEntry[]);
+      });
+  }, [locationId]);
 
   useEffect(() => {
     if (!locationId || !profile?.organization_id) return;
@@ -351,6 +374,34 @@ export default function ManagerSchedule() {
     const w = workers.find((w) => w.user_id === id);
     return { userId: id, fullName: w?.full_name ?? "Unknown", role: "", availability: {} };
   });
+
+  // Generate virtual shifts for fulltimers based on their recurring schedules
+  const fulltimerVirtualShifts: ShiftEntry[] = [];
+  for (const ftEntry of fulltimerSchedules) {
+    const w = workers.find((w) => w.user_id === ftEntry.user_id && w.role === "fulltimer");
+    if (!w) continue;
+    for (const day of days) {
+      const dow = getDayOfWeek(day);
+      if (dow !== ftEntry.day_of_week) continue;
+      const dateStr = toLocalDateStr(day);
+      // Skip if there's already a real shift for this fulltimer on this day
+      const hasRealShift = shifts.some((s) => s.user_id === ftEntry.user_id && s.date === dateStr);
+      if (hasRealShift) continue;
+      fulltimerVirtualShifts.push({
+        id: `ft-${ftEntry.user_id}-${dateStr}`,
+        user_id: ftEntry.user_id,
+        date: dateStr,
+        start_time: ftEntry.start_time,
+        end_time: ftEntry.end_time,
+        published: true,
+        standby: false,
+        is_fulltimer_auto: true,
+        profile: { full_name: w.full_name },
+      });
+    }
+  }
+  // Merge fulltimer virtual shifts into the shifts for display
+  const allShiftsForDisplay = [...shifts, ...fulltimerVirtualShifts];
   // Check if there are publishable yellow availability boxes (with valid start times)
   const hasPublishableAvailability = orderedAvailabilities.some((ua) =>
     days.some((day) => {
@@ -594,7 +645,7 @@ export default function ManagerSchedule() {
   const selectedDow = getDayOfWeek(selectedDay);
   // Show all workers for the selected day (available ones first, then others)
   const selectedAllWorkers = orderedAvailabilities;
-  const selectedDayShifts = shifts.filter((s) => s.date === selectedDateStr);
+  const selectedDayShifts = allShiftsForDisplay.filter((s) => s.date === selectedDateStr);
 
   // Workers for add modal
   const addWorkerModalDow = addWorkerModal ? getDayOfWeek(new Date(addWorkerModal.date + "T12:00:00")) : null;
@@ -896,7 +947,7 @@ export default function ManagerSchedule() {
                 const avail = ua.availability[dow];
                 return avail && avail.available && avail.preset !== "UNAVAILABLE";
               });
-              const dayShifts = shifts.filter((s) => s.date === dateStr);
+              const dayShifts = allShiftsForDisplay.filter((s) => s.date === dateStr);
               const isDropTarget = dragOverDate === dateStr;
 
               return (
@@ -1052,7 +1103,7 @@ export default function ManagerSchedule() {
                       const dow = getDayOfWeek(day);
                       const avail = ua.availability[dow];
                       const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
-                      const workerShifts = shifts.filter((s) => s.user_id === ua.userId && s.date === dateStr);
+                      const workerShifts = allShiftsForDisplay.filter((s) => s.user_id === ua.userId && s.date === dateStr);
                       const pendingEdit = getPendingEdit(ua.userId, dateStr, avail);
                       const availKey = `${ua.userId}|${dateStr}`;
                       const isDismissed = dismissedAvail.has(availKey);
@@ -1068,6 +1119,18 @@ export default function ManagerSchedule() {
                         >
                           <div className="space-y-0.5 min-h-[36px]">
                             {workerShifts.map((s) => {
+                              if (s.is_fulltimer_auto) {
+                                return (
+                                  <div key={s.id} className="rounded px-1 py-1 bg-primary/10 border border-primary/20 text-xs">
+                                    <div className="flex gap-0.5 items-center text-primary font-medium">
+                                      <span>{s.start_time}</span>
+                                      <span className="text-muted-foreground">–</span>
+                                      <span>{s.end_time}</span>
+                                    </div>
+                                    <span className="text-[9px] text-muted-foreground">Fulltimer</span>
+                                  </div>
+                                );
+                              }
                               const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                               return (
                                 <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>

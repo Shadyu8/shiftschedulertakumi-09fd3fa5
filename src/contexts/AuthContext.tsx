@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-type AppRole = "admin" | "manager" | "shiftleader" | "worker" | "kiosk";
+type AppRole = "admin" | "manager" | "shiftleader" | "worker" | "kiosk" | "fulltimer";
 
 interface Profile {
   id: string;
@@ -14,6 +14,7 @@ interface Profile {
   unique_key: string | null;
   active: boolean;
   availability_locked: boolean;
+  staff_type: string;
 }
 
 interface AuthContextType {

@@ -17,6 +17,7 @@ export default function IndexPage() {
       manager: "/manager",
       shiftleader: "/shiftleader",
       worker: "/worker",
+      fulltimer: "/worker",
       kiosk: "/kiosk",
     };
     navigate(routes[role || ""] || "/login", { replace: true });
