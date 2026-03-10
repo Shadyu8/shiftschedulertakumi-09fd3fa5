@@ -267,11 +267,12 @@ serve(async (req) => {
       });
     }
 
-    // Update profile with organization and phone
+    // Update profile with organization, phone, and staff_type
     if (newUser.user) {
       const profileUpdates: Record<string, any> = {};
       if (organization_id) profileUpdates.organization_id = organization_id;
       if (phone) profileUpdates.phone = phone;
+      if (body.staff_type) profileUpdates.staff_type = body.staff_type;
       if (Object.keys(profileUpdates).length > 0) {
         await adminClient
           .from("profiles")
