@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Lock, Unlock, Pencil, UserX, UserCheck, MapPin } from "lucide-react";
+import { Plus, Trash2, Lock, Unlock, Pencil, UserX, UserCheck, MapPin, Calendar } from "lucide-react";
 import { toast } from "sonner";
 
 interface Location {
@@ -26,8 +26,19 @@ interface Worker {
   active: boolean;
   availability_locked: boolean;
   role?: string;
+  staff_type?: string;
   location_ids?: string[];
 }
+
+interface FulltimerScheduleEntry {
+  id?: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  enabled: boolean;
+}
+
+const DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function ManagerUsers() {
   const { user, profile, role: myRole } = useAuth();
@@ -41,6 +52,7 @@ export default function ManagerUsers() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
+  const [staffType, setStaffType] = useState("floor");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -54,6 +66,7 @@ export default function ManagerUsers() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editRole, setEditRole] = useState("");
+  const [editStaffType, setEditStaffType] = useState("floor");
   const [editPassword, setEditPassword] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [editLocations, setEditLocations] = useState<string[]>([]);
@@ -62,6 +75,12 @@ export default function ManagerUsers() {
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Worker | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Fulltimer schedule dialog
+  const [ftScheduleWorker, setFtScheduleWorker] = useState<Worker | null>(null);
+  const [ftScheduleLocation, setFtScheduleLocation] = useState("");
+  const [ftScheduleEntries, setFtScheduleEntries] = useState<FulltimerScheduleEntry[]>([]);
+  const [ftSaving, setFtSaving] = useState(false);
 
   async function fetchWorkers() {
     if (!profile?.organization_id) return;
@@ -100,6 +119,7 @@ export default function ManagerUsers() {
       profileData.map((w: any) => ({
         ...w,
         role: roleMap.get(w.user_id) || "worker",
+        staff_type: w.staff_type || "floor",
         location_ids: locMap.get(w.user_id) || [],
       }))
     );
@@ -108,11 +128,10 @@ export default function ManagerUsers() {
   useEffect(() => { fetchWorkers(); }, [profile]);
 
   function resetCreateForm() {
-    setEmail(""); setFullName(""); setPhone(""); setPassword(""); setRole("worker"); setSelectedLocation("");
+    setEmail(""); setFullName(""); setPhone(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
-  // Step 1: Fill form and submit -> go to password confirmation
   function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !fullName.trim() || !password) return;
@@ -121,14 +140,12 @@ export default function ManagerUsers() {
     setManagerPassword("");
   }
 
-  // Step 2: Verify manager password then create
   async function handleConfirmCreate() {
     if (!managerPassword) return;
     setCreating(true);
     setConfirmError("");
 
     try {
-      // Verify manager's password by attempting sign-in
       const { error: authErr } = await supabase.auth.signInWithPassword({
         email: user?.email || "",
         password: managerPassword,
@@ -141,7 +158,7 @@ export default function ManagerUsers() {
 
       const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, phone: phone.trim() || null, password, role, organization_id: profile?.organization_id, location_ids: locationIds },
+        body: { email, full_name: fullName, phone: phone.trim() || null, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
@@ -167,6 +184,7 @@ export default function ManagerUsers() {
     setEditName(w.full_name);
     setEditPhone(w.phone || "");
     setEditRole(w.role || "worker");
+    setEditStaffType(w.staff_type || "floor");
     setEditPassword("");
     setEditActive(w.active);
     setEditLocations(w.location_ids || []);
@@ -182,6 +200,7 @@ export default function ManagerUsers() {
         full_name: editName,
         phone: editPhone.trim() || null,
         role: editRole,
+        staff_type: editStaffType,
         active: editActive,
         location_ids: editLocations,
       };
@@ -219,12 +238,87 @@ export default function ManagerUsers() {
     }
   }
 
+  // Fulltimer schedule management
+  async function openFtSchedule(w: Worker) {
+    setFtScheduleWorker(w);
+    const firstLoc = w.location_ids?.[0] || "";
+    setFtScheduleLocation(firstLoc);
+    if (firstLoc) {
+      await loadFtSchedule(w.user_id, firstLoc);
+    } else {
+      setFtScheduleEntries(DAY_LABELS.map((_, i) => ({ day_of_week: i, start_time: "09:00", end_time: "17:00", enabled: false })));
+    }
+  }
+
+  async function loadFtSchedule(userId: string, locationId: string) {
+    const { data } = await supabase
+      .from("fulltimer_schedules")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("location_id", locationId);
+    
+    const existingMap = new Map((data || []).map((d: any) => [d.day_of_week, d]));
+    setFtScheduleEntries(
+      DAY_LABELS.map((_, i) => {
+        const existing = existingMap.get(i);
+        return existing
+          ? { id: existing.id, day_of_week: i, start_time: existing.start_time, end_time: existing.end_time, enabled: true }
+          : { day_of_week: i, start_time: "09:00", end_time: "17:00", enabled: false };
+      })
+    );
+  }
+
+  async function saveFtSchedule() {
+    if (!ftScheduleWorker || !ftScheduleLocation) return;
+    setFtSaving(true);
+    try {
+      // Delete existing entries for this user+location
+      await supabase
+        .from("fulltimer_schedules")
+        .delete()
+        .eq("user_id", ftScheduleWorker.user_id)
+        .eq("location_id", ftScheduleLocation);
+
+      // Insert enabled entries
+      const toInsert = ftScheduleEntries
+        .filter((e) => e.enabled)
+        .map((e) => ({
+          user_id: ftScheduleWorker.user_id,
+          location_id: ftScheduleLocation,
+          day_of_week: e.day_of_week,
+          start_time: e.start_time,
+          end_time: e.end_time,
+        }));
+
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from("fulltimer_schedules").insert(toInsert);
+        if (error) throw error;
+      }
+
+      toast.success("Fulltimer schedule saved");
+      setFtScheduleWorker(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save schedule");
+    } finally {
+      setFtSaving(false);
+    }
+  }
+
   const roleBadgeColor = (r: string) => {
     switch (r) {
       case "admin": return "destructive";
       case "manager": return "default";
       case "shiftleader": return "secondary";
+      case "fulltimer": return "default";
       default: return "outline";
+    }
+  };
+
+  const roleLabel = (r: string) => {
+    switch (r) {
+      case "shiftleader": return "Shift Leader";
+      case "fulltimer": return "Fulltimer";
+      default: return r;
     }
   };
 
@@ -245,7 +339,10 @@ export default function ManagerUsers() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-foreground truncate">{w.full_name}</p>
                   <Badge variant={roleBadgeColor(w.role || "worker")} className="text-[10px] capitalize">
-                    {w.role === "shiftleader" ? "Shift Leader" : w.role}
+                    {roleLabel(w.role || "worker")}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {w.staff_type === "kitchen" ? "🍳 Kitchen" : "🏠 Floor"}
                   </Badge>
                   {!w.active && (
                     <Badge variant="outline" className="text-[10px] text-muted-foreground border-muted">
@@ -265,9 +362,16 @@ export default function ManagerUsers() {
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
-              <Button size="icon" variant="ghost" onClick={() => toggleLock(w.user_id, w.availability_locked)} title={w.availability_locked ? "Unlock availability" : "Lock availability"}>
-                {w.availability_locked ? <Lock className="w-4 h-4 text-warning" /> : <Unlock className="w-4 h-4" />}
-              </Button>
+              {w.role === "fulltimer" && (
+                <Button size="icon" variant="ghost" onClick={() => openFtSchedule(w)} title="Fulltimer schedule">
+                  <Calendar className="w-4 h-4 text-primary" />
+                </Button>
+              )}
+              {w.role !== "fulltimer" && (
+                <Button size="icon" variant="ghost" onClick={() => toggleLock(w.user_id, w.availability_locked)} title={w.availability_locked ? "Unlock availability" : "Lock availability"}>
+                  {w.availability_locked ? <Lock className="w-4 h-4 text-warning" /> : <Unlock className="w-4 h-4" />}
+                </Button>
+              )}
               <Button size="icon" variant="ghost" onClick={() => openEdit(w)} title="Edit user">
                 <Pencil className="w-4 h-4" />
               </Button>
@@ -310,16 +414,29 @@ export default function ManagerUsers() {
                 <Label>Password</Label>
                 <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" type="password" required />
               </div>
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="worker">Worker</SelectItem>
-                    <SelectItem value="shiftleader">Shift Leader</SelectItem>
-                    {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Role</Label>
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="worker">Worker</SelectItem>
+                      <SelectItem value="shiftleader">Shift Leader</SelectItem>
+                      <SelectItem value="fulltimer">Fulltimer</SelectItem>
+                      {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Staff Type</Label>
+                  <Select value={staffType} onValueChange={setStaffType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="floor">🏠 Floor</SelectItem>
+                      <SelectItem value="kitchen">🍳 Kitchen</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               {locations.length > 0 && (
                 <div className="space-y-1.5">
@@ -344,7 +461,8 @@ export default function ManagerUsers() {
                 <p><span className="text-muted-foreground">Name:</span> {fullName}</p>
                 <p><span className="text-muted-foreground">Email:</span> {email}</p>
                 {phone && <p><span className="text-muted-foreground">Phone:</span> {phone}</p>}
-                <p><span className="text-muted-foreground">Role:</span> {role === "shiftleader" ? "Shift Leader" : role}</p>
+                <p><span className="text-muted-foreground">Role:</span> {roleLabel(role)}</p>
+                <p><span className="text-muted-foreground">Staff Type:</span> {staffType === "kitchen" ? "Kitchen" : "Floor"}</p>
                 {selectedLocation && (
                   <p><span className="text-muted-foreground">Location:</span> {locations.find((l) => l.id === selectedLocation)?.name}</p>
                 )}
@@ -390,16 +508,29 @@ export default function ManagerUsers() {
               <Label>Phone Number</Label>
               <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Role</Label>
-              <Select value={editRole} onValueChange={setEditRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="worker">Worker</SelectItem>
-                  <SelectItem value="shiftleader">Shift Leader</SelectItem>
-                  {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={editRole} onValueChange={setEditRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="worker">Worker</SelectItem>
+                    <SelectItem value="shiftleader">Shift Leader</SelectItem>
+                    <SelectItem value="fulltimer">Fulltimer</SelectItem>
+                    {myRole === "admin" && <SelectItem value="manager">Manager</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Staff Type</Label>
+                <Select value={editStaffType} onValueChange={setEditStaffType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="floor">🏠 Floor</SelectItem>
+                    <SelectItem value="kitchen">🍳 Kitchen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>New Password <span className="text-muted-foreground text-xs">(leave empty to keep current)</span></Label>
@@ -455,6 +586,64 @@ export default function ManagerUsers() {
               {deleting ? "Deleting..." : "Delete User"}
             </Button>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fulltimer Schedule Dialog */}
+      <Dialog open={!!ftScheduleWorker} onOpenChange={(open) => !open && setFtScheduleWorker(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Fulltimer Schedule — {ftScheduleWorker?.full_name}</DialogTitle>
+            <DialogDescription>Set the recurring weekly work days and times for this fulltimer.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            {ftScheduleWorker && ftScheduleWorker.location_ids && ftScheduleWorker.location_ids.length > 1 && (
+              <div className="space-y-1.5">
+                <Label>Location</Label>
+                <Select value={ftScheduleLocation} onValueChange={(val) => { setFtScheduleLocation(val); loadFtSchedule(ftScheduleWorker.user_id, val); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ftScheduleWorker.location_ids.map((lid) => (
+                      <SelectItem key={lid} value={lid}>{locations.find((l) => l.id === lid)?.name || lid}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
+              {ftScheduleEntries.map((entry, idx) => (
+                <div key={idx} className={`flex items-center gap-3 p-2 rounded-lg border ${entry.enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/30"}`}>
+                  <Checkbox
+                    checked={entry.enabled}
+                    onCheckedChange={(checked) => {
+                      setFtScheduleEntries((prev) => prev.map((e, i) => i === idx ? { ...e, enabled: !!checked } : e));
+                    }}
+                  />
+                  <span className="text-sm font-medium w-24">{DAY_LABELS[entry.day_of_week]}</span>
+                  {entry.enabled && (
+                    <div className="flex items-center gap-1.5 flex-1">
+                      <Input
+                        type="time"
+                        value={entry.start_time}
+                        onChange={(e) => setFtScheduleEntries((prev) => prev.map((en, i) => i === idx ? { ...en, start_time: e.target.value } : en))}
+                        className="h-8 text-xs w-24"
+                      />
+                      <span className="text-muted-foreground text-xs">–</span>
+                      <Input
+                        type="time"
+                        value={entry.end_time}
+                        onChange={(e) => setFtScheduleEntries((prev) => prev.map((en, i) => i === idx ? { ...en, end_time: e.target.value } : en))}
+                        className="h-8 text-xs w-24"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button onClick={saveFtSchedule} disabled={ftSaving || !ftScheduleLocation} className="w-full">
+              {ftSaving ? "Saving..." : "Save Schedule"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
