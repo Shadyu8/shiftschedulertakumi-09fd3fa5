@@ -14,6 +14,7 @@ interface Profile {
   unique_key: string | null;
   active: boolean;
   availability_locked: boolean;
+  staff_type: string;
 }
 
 interface AuthContextType {

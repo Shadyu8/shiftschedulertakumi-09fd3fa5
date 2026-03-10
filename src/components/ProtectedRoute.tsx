@@ -28,6 +28,7 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
       manager: "/manager",
       shiftleader: "/shiftleader",
       worker: "/worker",
+      fulltimer: "/worker",
       kiosk: "/kiosk",
     };
     return <Navigate to={roleRoutes[role] || "/"} replace />;
