@@ -158,6 +158,47 @@ export type Database = {
           },
         ]
       }
+      fulltimer_schedules: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          location_id: string
+          start_time: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          end_time?: string
+          id?: string
+          location_id: string
+          start_time?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          location_id?: string
+          start_time?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fulltimer_schedules_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kiosk_accounts: {
         Row: {
           created_at: string
@@ -318,6 +359,7 @@ export type Database = {
           organization_id: string | null
           phone: string | null
           profile_picture: string | null
+          staff_type: string
           unique_key: string | null
           updated_at: string
           user_id: string
@@ -332,6 +374,7 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           profile_picture?: string | null
+          staff_type?: string
           unique_key?: string | null
           updated_at?: string
           user_id: string
@@ -346,6 +389,7 @@ export type Database = {
           organization_id?: string | null
           phone?: string | null
           profile_picture?: string | null
+          staff_type?: string
           unique_key?: string | null
           updated_at?: string
           user_id?: string
@@ -535,7 +579,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "manager" | "shiftleader" | "worker" | "kiosk"
+      app_role:
+        | "admin"
+        | "manager"
+        | "shiftleader"
+        | "worker"
+        | "kiosk"
+        | "fulltimer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -663,7 +713,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "manager", "shiftleader", "worker", "kiosk"],
+      app_role: [
+        "admin",
+        "manager",
+        "shiftleader",
+        "worker",
+        "kiosk",
+        "fulltimer",
+      ],
     },
   },
 } as const
