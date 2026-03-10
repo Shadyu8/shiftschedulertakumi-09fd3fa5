@@ -1103,7 +1103,7 @@ export default function ManagerSchedule() {
                       const dow = getDayOfWeek(day);
                       const avail = ua.availability[dow];
                       const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
-                      const workerShifts = shifts.filter((s) => s.user_id === ua.userId && s.date === dateStr);
+                      const workerShifts = allShiftsForDisplay.filter((s) => s.user_id === ua.userId && s.date === dateStr);
                       const pendingEdit = getPendingEdit(ua.userId, dateStr, avail);
                       const availKey = `${ua.userId}|${dateStr}`;
                       const isDismissed = dismissedAvail.has(availKey);
