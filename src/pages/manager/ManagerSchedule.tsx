@@ -256,7 +256,7 @@ export default function ManagerSchedule() {
         const filtered: Worker[] = userIds
           .filter((uid) => {
             const r = roleMap.get(uid);
-            return r === "worker" || r === "shiftleader";
+            return r === "worker" || r === "shiftleader" || r === "fulltimer";
           })
           .map((uid) => ({
             user_id: uid,
