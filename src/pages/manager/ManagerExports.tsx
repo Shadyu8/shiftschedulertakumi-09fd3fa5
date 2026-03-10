@@ -33,15 +33,32 @@ export default function ManagerExports() {
 
   useEffect(() => {
     if (!profile?.organization_id) return;
+
+    // Fetch workers - exclude fulltimers from exports
+    Promise.all([
+      supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .eq("organization_id", profile.organization_id)
+        .eq("active", true)
+        .order("full_name"),
+      supabase
+        .from("user_roles")
+        .select("user_id, role")
+    ]).then(([profilesRes, rolesRes]) => {
+      const roleMap = new Map((rolesRes.data || []).map((r: any) => [r.user_id, r.role]));
+      const filtered = (profilesRes.data || []).filter((w: any) => roleMap.get(w.user_id) !== "fulltimer");
+      setWorkers(filtered);
+    });
+
     supabase
-      .from("profiles")
-      .select("user_id, full_name")
+      .from("locations")
+      .select("id, name")
       .eq("organization_id", profile.organization_id)
-      .eq("active", true)
-      .order("full_name")
       .then(({ data }) => {
-        if (data) setWorkers(data);
+        if (data) setLocations(new Map(data.map((l) => [l.id, l.name])));
       });
+  }, [profile]);
     supabase
       .from("locations")
       .select("id, name")

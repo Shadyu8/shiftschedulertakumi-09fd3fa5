@@ -1,17 +1,25 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 
 export default function WorkerDashboard() {
-  const links = [
-    { href: "/worker/schedule", label: "📅 My Schedule" },
-    { href: "/worker/punches", label: "🕒 My Punches" },
-    { href: "/worker/availability", label: "📋 Availability" },
-    { href: "/shiftschedule", label: "📆 Shift Schedule" },
-  ];
+  const { role } = useAuth();
+
+  const links = role === "fulltimer"
+    ? [
+        { href: "/worker/schedule", label: "📅 My Schedule" },
+        { href: "/shiftschedule", label: "📆 Shift Schedule" },
+      ]
+    : [
+        { href: "/worker/schedule", label: "📅 My Schedule" },
+        { href: "/worker/punches", label: "🕒 My Punches" },
+        { href: "/worker/availability", label: "📋 Availability" },
+        { href: "/shiftschedule", label: "📆 Shift Schedule" },
+      ];
 
   return (
     <AppLayout>
-      <h1 className="page-header mb-8">👤 Worker Dashboard</h1>
+      <h1 className="page-header mb-8">👤 {role === "fulltimer" ? "Fulltimer" : "Worker"} Dashboard</h1>
       <div className="dashboard-grid">
         {links.map((link) => (
           <Link
