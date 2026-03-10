@@ -60,8 +60,8 @@ const App = () => (
             <Route path="/manager/approvals" element={<ProtectedRoute allowedRoles={["manager"]}><ManagerPunchApprovals /></ProtectedRoute>} />
 
             {/* Worker routes */}
-            <Route path="/worker" element={<ProtectedRoute allowedRoles={["worker", "shiftleader"]}><WorkerDashboard /></ProtectedRoute>} />
-            <Route path="/worker/schedule" element={<ProtectedRoute allowedRoles={["worker", "shiftleader"]}><WorkerSchedule /></ProtectedRoute>} />
+            <Route path="/worker" element={<ProtectedRoute allowedRoles={["worker", "shiftleader", "fulltimer"]}><WorkerDashboard /></ProtectedRoute>} />
+            <Route path="/worker/schedule" element={<ProtectedRoute allowedRoles={["worker", "shiftleader", "fulltimer"]}><WorkerSchedule /></ProtectedRoute>} />
             <Route path="/worker/punches" element={<ProtectedRoute allowedRoles={["worker", "shiftleader"]}><WorkerPunches /></ProtectedRoute>} />
             <Route path="/worker/availability" element={<ProtectedRoute allowedRoles={["worker", "shiftleader"]}><WorkerAvailability /></ProtectedRoute>} />
 
