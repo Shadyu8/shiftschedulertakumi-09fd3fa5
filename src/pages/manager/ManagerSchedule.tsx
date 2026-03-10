@@ -374,6 +374,34 @@ export default function ManagerSchedule() {
     const w = workers.find((w) => w.user_id === id);
     return { userId: id, fullName: w?.full_name ?? "Unknown", role: "", availability: {} };
   });
+
+  // Generate virtual shifts for fulltimers based on their recurring schedules
+  const fulltimerVirtualShifts: ShiftEntry[] = [];
+  for (const ftEntry of fulltimerSchedules) {
+    const w = workers.find((w) => w.user_id === ftEntry.user_id && w.role === "fulltimer");
+    if (!w) continue;
+    for (const day of days) {
+      const dow = getDayOfWeek(day);
+      if (dow !== ftEntry.day_of_week) continue;
+      const dateStr = toLocalDateStr(day);
+      // Skip if there's already a real shift for this fulltimer on this day
+      const hasRealShift = shifts.some((s) => s.user_id === ftEntry.user_id && s.date === dateStr);
+      if (hasRealShift) continue;
+      fulltimerVirtualShifts.push({
+        id: `ft-${ftEntry.user_id}-${dateStr}`,
+        user_id: ftEntry.user_id,
+        date: dateStr,
+        start_time: ftEntry.start_time,
+        end_time: ftEntry.end_time,
+        published: true,
+        standby: false,
+        is_fulltimer_auto: true,
+        profile: { full_name: w.full_name },
+      });
+    }
+  }
+  // Merge fulltimer virtual shifts into the shifts for display
+  const allShiftsForDisplay = [...shifts, ...fulltimerVirtualShifts];
   // Check if there are publishable yellow availability boxes (with valid start times)
   const hasPublishableAvailability = orderedAvailabilities.some((ua) =>
     days.some((day) => {
