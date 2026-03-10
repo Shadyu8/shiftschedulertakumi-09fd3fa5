@@ -270,6 +270,18 @@ export default function ManagerSchedule() {
       });
   }, [locationId, profile]);
 
+  // Fetch fulltimer schedules for this location
+  useEffect(() => {
+    if (!locationId) return;
+    supabase
+      .from("fulltimer_schedules")
+      .select("user_id, day_of_week, start_time, end_time")
+      .eq("location_id", locationId)
+      .then(({ data }) => {
+        setFulltimerSchedules((data || []) as FulltimerScheduleEntry[]);
+      });
+  }, [locationId]);
+
   useEffect(() => {
     if (!locationId || !profile?.organization_id) return;
     const ws = toLocalDateStr(weekStart);
