@@ -484,8 +484,15 @@ export default function ManagerSchedule() {
     }
   }
 
-  function removeFulltimerVirtualShift(userId: string, date: string) {
+  async function removeFulltimerVirtualShift(userId: string, date: string) {
     setRemovedFulltimerDays((prev) => new Set(prev).add(`${userId}|${date}`));
+    // Persist the override to DB so it survives refresh and is week-specific
+    await supabase.from("fulltimer_schedule_overrides").upsert({
+      user_id: userId,
+      location_id: locationId,
+      date,
+      removed: true,
+    }, { onConflict: "user_id,location_id,date" });
   }
 
   async function saveShiftTime(shiftId: string, overrides?: { startTime?: string; endTime?: string }) {
