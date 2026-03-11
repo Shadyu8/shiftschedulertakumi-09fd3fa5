@@ -564,8 +564,9 @@ export default function ManagerSchedule() {
 
   // ── Drag & drop: shifts ──
 
-  function handleDragStart(shiftId: string) {
+  function handleDragStart(shiftId: string, userId?: string) {
     dragShiftId.current = shiftId;
+    dragShiftUserId.current = userId ?? null;
     dragRowUserId.current = null;
   }
 
@@ -584,12 +585,53 @@ export default function ManagerSchedule() {
     setDragOverDate(null);
     const shiftId = dragShiftId.current;
     if (!shiftId) return;
+
+    const isVirtual = shiftId.startsWith("ft-");
+    const sourceUserId = dragShiftUserId.current;
+
+    if (isVirtual) {
+      // Fulltimer virtual shifts can only move within the same user
+      const effectiveUserId = targetUserId ?? sourceUserId;
+      if (effectiveUserId !== sourceUserId) return;
+
+      const virtualShift = fulltimerVirtualShifts.find((s) => s.id === shiftId);
+      if (!virtualShift || virtualShift.date === targetDate) return;
+
+      // Check if target date already has a shift for this user
+      const hasDupe = allShiftsForDisplay.some((s) => s.user_id === sourceUserId && s.date === targetDate);
+      if (hasDupe) return;
+
+      // Create real shift on target date
+      const { error } = await supabase.from("shifts").insert({
+        user_id: sourceUserId!,
+        location_id: locationId,
+        date: targetDate,
+        start_time: virtualShift.start_time,
+        end_time: virtualShift.end_time,
+        standby: false,
+      });
+      if (!error) {
+        // Remove the source virtual shift
+        setRemovedFulltimerDays((prev) => new Set(prev).add(`${sourceUserId}|${virtualShift.date}`));
+        refreshShifts();
+      }
+      dragShiftId.current = null;
+      dragShiftUserId.current = null;
+      return;
+    }
+
     const shift = shifts.find((s) => s.id === shiftId);
     if (!shift) return;
     const effectiveUserId = targetUserId ?? shift.user_id;
     if (shift.date === targetDate && shift.user_id === effectiveUserId) return;
     const hasDupe = shifts.some((s) => s.user_id === effectiveUserId && s.date === targetDate && s.id !== shiftId);
     if (hasDupe) return;
+
+    // Prevent moving a non-fulltimer shift onto a fulltimer row (and vice versa)
+    const sourceWorker = workers.find((w) => w.user_id === shift.user_id);
+    const targetWorker = workers.find((w) => w.user_id === effectiveUserId);
+    if (sourceWorker?.role === "fulltimer" && targetWorker?.role !== "fulltimer") return;
+    if (sourceWorker?.role !== "fulltimer" && targetWorker?.role === "fulltimer") return;
 
     const targetProfile = workers.find((w) => w.user_id === effectiveUserId);
     setShifts((prev) => prev.map((s) => s.id === shiftId ? { ...s, date: targetDate, user_id: effectiveUserId, profile: targetProfile ? { full_name: targetProfile.full_name } : s.profile } : s));
@@ -599,6 +641,7 @@ export default function ManagerSchedule() {
     if (shift.user_id !== effectiveUserId) updates.user_id = effectiveUserId;
     await supabase.from("shifts").update(updates).eq("id", shiftId);
     dragShiftId.current = null;
+    dragShiftUserId.current = null;
   }
 
   // ── Drag & drop: row reorder ──
