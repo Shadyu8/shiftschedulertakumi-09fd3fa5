@@ -392,6 +392,8 @@ export default function ManagerSchedule() {
       // Skip if there's already a real shift for this fulltimer on this day
       const hasRealShift = shifts.some((s) => s.user_id === ftEntry.user_id && s.date === dateStr);
       if (hasRealShift) continue;
+      // Skip if removed by manager this session
+      if (removedFulltimerDays.has(`${ftEntry.user_id}|${dateStr}`)) continue;
       fulltimerVirtualShifts.push({
         id: `ft-${ftEntry.user_id}-${dateStr}`,
         user_id: ftEntry.user_id,
