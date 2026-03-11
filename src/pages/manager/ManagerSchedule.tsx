@@ -634,8 +634,14 @@ export default function ManagerSchedule() {
         standby: false,
       });
       if (!error) {
-        // Remove the source virtual shift
+        // Persist removal of source virtual shift
         setRemovedFulltimerDays((prev) => new Set(prev).add(`${sourceUserId}|${virtualShift.date}`));
+        await supabase.from("fulltimer_schedule_overrides").upsert({
+          user_id: sourceUserId!,
+          location_id: locationId,
+          date: virtualShift.date,
+          removed: true,
+        }, { onConflict: "user_id,location_id,date" });
         refreshShifts();
       }
       dragShiftId.current = null;
