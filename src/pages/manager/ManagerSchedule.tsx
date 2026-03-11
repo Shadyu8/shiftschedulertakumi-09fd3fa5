@@ -197,7 +197,7 @@ export default function ManagerSchedule() {
   // Dismissed availability
   const [dismissedAvail, setDismissedAvail] = useState<Set<string>>(new Set());
 
-  // Removed fulltimer virtual shifts (per session)
+  // Removed fulltimer virtual shifts (persisted per date)
   const [removedFulltimerDays, setRemovedFulltimerDays] = useState<Set<string>>(new Set());
 
   // Inline editing
@@ -298,7 +298,9 @@ export default function ManagerSchedule() {
       supabase.from("availability").select("user_id, day_of_week, available, start_time, end_time, preset").eq("week_start", ws).eq("location_id", locationId),
       // Location settings
       supabase.from("location_settings").select("*").eq("location_id", locationId).maybeSingle(),
-    ]).then(async ([shiftsRes, availRes, settingsRes]) => {
+      // Fulltimer schedule overrides for this week
+      supabase.from("fulltimer_schedule_overrides").select("user_id, date").eq("location_id", locationId).eq("removed", true).gte("date", ws).lte("date", endDate),
+    ]).then(async ([shiftsRes, availRes, settingsRes, overridesRes]) => {
       // Handle shifts with profile lookups
       if (shiftsRes.data && shiftsRes.data.length > 0) {
         const userIds = [...new Set(shiftsRes.data.map((s: any) => s.user_id))];
@@ -341,11 +343,21 @@ export default function ManagerSchedule() {
           latest_shift_end: settingsRes.data.latest_shift_end,
         });
       }
+
+      // Load persisted fulltimer overrides
+      if (overridesRes.data) {
+        const removed = new Set<string>();
+        for (const o of overridesRes.data as any[]) {
+          removed.add(`${o.user_id}|${o.date}`);
+        }
+        setRemovedFulltimerDays(removed);
+      } else {
+        setRemovedFulltimerDays(new Set());
+      }
     });
 
     setPendingEdits({});
     setDismissedAvail(new Set());
-    setRemovedFulltimerDays(new Set());
   }, [locationId, weekStart, workers]);
 
   // Sync shiftEdits
@@ -392,7 +404,7 @@ export default function ManagerSchedule() {
       // Skip if there's already a real shift for this fulltimer on this day
       const hasRealShift = shifts.some((s) => s.user_id === ftEntry.user_id && s.date === dateStr);
       if (hasRealShift) continue;
-      // Skip if removed by manager this session
+      // Skip if removed by manager (persisted override)
       if (removedFulltimerDays.has(`${ftEntry.user_id}|${dateStr}`)) continue;
       fulltimerVirtualShifts.push({
         id: `ft-${ftEntry.user_id}-${dateStr}`,
@@ -472,8 +484,15 @@ export default function ManagerSchedule() {
     }
   }
 
-  function removeFulltimerVirtualShift(userId: string, date: string) {
+  async function removeFulltimerVirtualShift(userId: string, date: string) {
     setRemovedFulltimerDays((prev) => new Set(prev).add(`${userId}|${date}`));
+    // Persist the override to DB so it survives refresh and is week-specific
+    await supabase.from("fulltimer_schedule_overrides").upsert({
+      user_id: userId,
+      location_id: locationId,
+      date,
+      removed: true,
+    }, { onConflict: "user_id,location_id,date" });
   }
 
   async function saveShiftTime(shiftId: string, overrides?: { startTime?: string; endTime?: string }) {
@@ -615,8 +634,14 @@ export default function ManagerSchedule() {
         standby: false,
       });
       if (!error) {
-        // Remove the source virtual shift
+        // Persist removal of source virtual shift
         setRemovedFulltimerDays((prev) => new Set(prev).add(`${sourceUserId}|${virtualShift.date}`));
+        await supabase.from("fulltimer_schedule_overrides").upsert({
+          user_id: sourceUserId!,
+          location_id: locationId,
+          date: virtualShift.date,
+          removed: true,
+        }, { onConflict: "user_id,location_id,date" });
         refreshShifts();
       }
       dragShiftId.current = null;

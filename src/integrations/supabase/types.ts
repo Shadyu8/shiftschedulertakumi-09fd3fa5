@@ -158,6 +158,41 @@ export type Database = {
           },
         ]
       }
+      fulltimer_schedule_overrides: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          location_id: string
+          removed: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          location_id: string
+          removed?: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          location_id?: string
+          removed?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fulltimer_schedule_overrides_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fulltimer_schedules: {
         Row: {
           created_at: string
