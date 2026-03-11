@@ -186,6 +186,7 @@ export default function ManagerSchedule() {
 
   // Drag & drop shifts
   const dragShiftId = useRef<string | null>(null);
+  const dragShiftUserId = useRef<string | null>(null); // track owner for fulltimer restriction
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
   // Drag & drop rows
@@ -195,6 +196,9 @@ export default function ManagerSchedule() {
 
   // Dismissed availability
   const [dismissedAvail, setDismissedAvail] = useState<Set<string>>(new Set());
+
+  // Removed fulltimer virtual shifts (per session)
+  const [removedFulltimerDays, setRemovedFulltimerDays] = useState<Set<string>>(new Set());
 
   // Inline editing
   const [shiftEdits, setShiftEdits] = useState<Record<string, { startTime: string; endTime: string }>>({});
@@ -341,6 +345,7 @@ export default function ManagerSchedule() {
 
     setPendingEdits({});
     setDismissedAvail(new Set());
+    setRemovedFulltimerDays(new Set());
   }, [locationId, weekStart, workers]);
 
   // Sync shiftEdits
@@ -387,6 +392,8 @@ export default function ManagerSchedule() {
       // Skip if there's already a real shift for this fulltimer on this day
       const hasRealShift = shifts.some((s) => s.user_id === ftEntry.user_id && s.date === dateStr);
       if (hasRealShift) continue;
+      // Skip if removed by manager this session
+      if (removedFulltimerDays.has(`${ftEntry.user_id}|${dateStr}`)) continue;
       fulltimerVirtualShifts.push({
         id: `ft-${ftEntry.user_id}-${dateStr}`,
         user_id: ftEntry.user_id,
@@ -463,6 +470,10 @@ export default function ManagerSchedule() {
         return next;
       });
     }
+  }
+
+  function removeFulltimerVirtualShift(userId: string, date: string) {
+    setRemovedFulltimerDays((prev) => new Set(prev).add(`${userId}|${date}`));
   }
 
   async function saveShiftTime(shiftId: string, overrides?: { startTime?: string; endTime?: string }) {
@@ -557,8 +568,9 @@ export default function ManagerSchedule() {
 
   // ── Drag & drop: shifts ──
 
-  function handleDragStart(shiftId: string) {
+  function handleDragStart(shiftId: string, userId?: string) {
     dragShiftId.current = shiftId;
+    dragShiftUserId.current = userId ?? null;
     dragRowUserId.current = null;
   }
 
@@ -577,12 +589,53 @@ export default function ManagerSchedule() {
     setDragOverDate(null);
     const shiftId = dragShiftId.current;
     if (!shiftId) return;
+
+    const isVirtual = shiftId.startsWith("ft-");
+    const sourceUserId = dragShiftUserId.current;
+
+    if (isVirtual) {
+      // Fulltimer virtual shifts can only move within the same user
+      const effectiveUserId = targetUserId ?? sourceUserId;
+      if (effectiveUserId !== sourceUserId) return;
+
+      const virtualShift = fulltimerVirtualShifts.find((s) => s.id === shiftId);
+      if (!virtualShift || virtualShift.date === targetDate) return;
+
+      // Check if target date already has a shift for this user
+      const hasDupe = allShiftsForDisplay.some((s) => s.user_id === sourceUserId && s.date === targetDate);
+      if (hasDupe) return;
+
+      // Create real shift on target date
+      const { error } = await supabase.from("shifts").insert({
+        user_id: sourceUserId!,
+        location_id: locationId,
+        date: targetDate,
+        start_time: virtualShift.start_time,
+        end_time: virtualShift.end_time,
+        standby: false,
+      });
+      if (!error) {
+        // Remove the source virtual shift
+        setRemovedFulltimerDays((prev) => new Set(prev).add(`${sourceUserId}|${virtualShift.date}`));
+        refreshShifts();
+      }
+      dragShiftId.current = null;
+      dragShiftUserId.current = null;
+      return;
+    }
+
     const shift = shifts.find((s) => s.id === shiftId);
     if (!shift) return;
     const effectiveUserId = targetUserId ?? shift.user_id;
     if (shift.date === targetDate && shift.user_id === effectiveUserId) return;
     const hasDupe = shifts.some((s) => s.user_id === effectiveUserId && s.date === targetDate && s.id !== shiftId);
     if (hasDupe) return;
+
+    // Prevent moving a non-fulltimer shift onto a fulltimer row (and vice versa)
+    const sourceWorker = workers.find((w) => w.user_id === shift.user_id);
+    const targetWorker = workers.find((w) => w.user_id === effectiveUserId);
+    if (sourceWorker?.role === "fulltimer" && targetWorker?.role !== "fulltimer") return;
+    if (sourceWorker?.role !== "fulltimer" && targetWorker?.role === "fulltimer") return;
 
     const targetProfile = workers.find((w) => w.user_id === effectiveUserId);
     setShifts((prev) => prev.map((s) => s.id === shiftId ? { ...s, date: targetDate, user_id: effectiveUserId, profile: targetProfile ? { full_name: targetProfile.full_name } : s.profile } : s));
@@ -592,6 +645,7 @@ export default function ManagerSchedule() {
     if (shift.user_id !== effectiveUserId) updates.user_id = effectiveUserId;
     await supabase.from("shifts").update(updates).eq("id", shiftId);
     dragShiftId.current = null;
+    dragShiftUserId.current = null;
   }
 
   // ── Drag & drop: row reorder ──
@@ -867,6 +921,19 @@ export default function ManagerSchedule() {
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
                       {workerShifts.map((s) => {
+                        if (s.is_fulltimer_auto) {
+                          return (
+                            <div key={s.id} className="relative px-3 pt-6 pb-2 rounded-lg bg-primary/10 border border-primary/20">
+                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
+                              <div className="flex items-center gap-1 text-primary font-medium">
+                                <span>{s.start_time}</span>
+                                <span className="text-muted-foreground text-sm">–</span>
+                                <span>{s.end_time}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">Fulltimer</span>
+                            </div>
+                          );
+                        }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                         return (
                           <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
@@ -973,6 +1040,24 @@ export default function ManagerSchedule() {
 
                     if (workerShifts.length > 0) {
                       return workerShifts.map((s) => {
+                        if (s.is_fulltimer_auto) {
+                          return (
+                            <div key={s.id} draggable onDragStart={() => handleDragStart(s.id, s.user_id)} className="relative bg-primary/5 border border-primary/20 rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
+                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
+                              <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
+                                <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
+                                <span className="text-xs text-primary bg-primary/10 rounded px-1 shrink-0">FT</span>
+                              </div>
+                              <div className="px-2 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                                <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                                  <span>{s.start_time}</span>
+                                  <span className="text-muted-foreground">–</span>
+                                  <span>{s.end_time}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                         return (
                           <div key={s.id} draggable onDragStart={() => handleDragStart(s.id)} className="relative bg-card border border-border rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
@@ -1121,7 +1206,8 @@ export default function ManagerSchedule() {
                             {workerShifts.map((s) => {
                               if (s.is_fulltimer_auto) {
                                 return (
-                                  <div key={s.id} className="rounded px-1 py-1 bg-primary/10 border border-primary/20 text-xs">
+                                  <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id, s.user_id); }} className="relative rounded px-1 pt-3 pb-1 bg-primary/10 border border-primary/20 text-xs cursor-grab active:cursor-grabbing">
+                                    <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Remove">×</button>
                                     <div className="flex gap-0.5 items-center text-primary font-medium">
                                       <span>{s.start_time}</span>
                                       <span className="text-muted-foreground">–</span>
