@@ -345,6 +345,7 @@ export default function ManagerSchedule() {
 
     setPendingEdits({});
     setDismissedAvail(new Set());
+    setRemovedFulltimerDays(new Set());
   }, [locationId, weekStart, workers]);
 
   // Sync shiftEdits
