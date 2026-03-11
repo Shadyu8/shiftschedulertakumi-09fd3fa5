@@ -921,6 +921,19 @@ export default function ManagerSchedule() {
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
                       {workerShifts.map((s) => {
+                        if (s.is_fulltimer_auto) {
+                          return (
+                            <div key={s.id} className="relative px-3 pt-6 pb-2 rounded-lg bg-primary/10 border border-primary/20">
+                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
+                              <div className="flex items-center gap-1 text-primary font-medium">
+                                <span>{s.start_time}</span>
+                                <span className="text-muted-foreground text-sm">–</span>
+                                <span>{s.end_time}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">Fulltimer</span>
+                            </div>
+                          );
+                        }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                         return (
                           <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
