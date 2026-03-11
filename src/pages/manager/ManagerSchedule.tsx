@@ -1027,6 +1027,24 @@ export default function ManagerSchedule() {
 
                     if (workerShifts.length > 0) {
                       return workerShifts.map((s) => {
+                        if (s.is_fulltimer_auto) {
+                          return (
+                            <div key={s.id} draggable onDragStart={() => handleDragStart(s.id, s.user_id)} className="relative bg-primary/5 border border-primary/20 rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
+                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
+                              <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
+                                <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
+                                <span className="text-xs text-primary bg-primary/10 rounded px-1 shrink-0">FT</span>
+                              </div>
+                              <div className="px-2 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                                <div className="flex items-center gap-1 text-primary font-medium text-sm">
+                                  <span>{s.start_time}</span>
+                                  <span className="text-muted-foreground">–</span>
+                                  <span>{s.end_time}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                         return (
                           <div key={s.id} draggable onDragStart={() => handleDragStart(s.id)} className="relative bg-card border border-border rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
