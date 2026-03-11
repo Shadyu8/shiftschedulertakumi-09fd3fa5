@@ -472,6 +472,10 @@ export default function ManagerSchedule() {
     }
   }
 
+  function removeFulltimerVirtualShift(userId: string, date: string) {
+    setRemovedFulltimerDays((prev) => new Set(prev).add(`${userId}|${date}`));
+  }
+
   async function saveShiftTime(shiftId: string, overrides?: { startTime?: string; endTime?: string }) {
     const cur = { ...(shiftEditsRef.current[shiftId] ?? {}), ...overrides };
     if (!cur.startTime && !cur.endTime) return;
