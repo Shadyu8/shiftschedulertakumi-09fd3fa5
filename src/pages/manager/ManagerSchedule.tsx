@@ -186,6 +186,7 @@ export default function ManagerSchedule() {
 
   // Drag & drop shifts
   const dragShiftId = useRef<string | null>(null);
+  const dragShiftUserId = useRef<string | null>(null); // track owner for fulltimer restriction
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
 
   // Drag & drop rows
@@ -195,6 +196,9 @@ export default function ManagerSchedule() {
 
   // Dismissed availability
   const [dismissedAvail, setDismissedAvail] = useState<Set<string>>(new Set());
+
+  // Removed fulltimer virtual shifts (per session)
+  const [removedFulltimerDays, setRemovedFulltimerDays] = useState<Set<string>>(new Set());
 
   // Inline editing
   const [shiftEdits, setShiftEdits] = useState<Record<string, { startTime: string; endTime: string }>>({});
