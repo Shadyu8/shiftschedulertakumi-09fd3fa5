@@ -298,7 +298,9 @@ export default function ManagerSchedule() {
       supabase.from("availability").select("user_id, day_of_week, available, start_time, end_time, preset").eq("week_start", ws).eq("location_id", locationId),
       // Location settings
       supabase.from("location_settings").select("*").eq("location_id", locationId).maybeSingle(),
-    ]).then(async ([shiftsRes, availRes, settingsRes]) => {
+      // Fulltimer schedule overrides for this week
+      supabase.from("fulltimer_schedule_overrides").select("user_id, date").eq("location_id", locationId).eq("removed", true).gte("date", ws).lte("date", endDate),
+    ]).then(async ([shiftsRes, availRes, settingsRes, overridesRes]) => {
       // Handle shifts with profile lookups
       if (shiftsRes.data && shiftsRes.data.length > 0) {
         const userIds = [...new Set(shiftsRes.data.map((s: any) => s.user_id))];
@@ -341,11 +343,21 @@ export default function ManagerSchedule() {
           latest_shift_end: settingsRes.data.latest_shift_end,
         });
       }
+
+      // Load persisted fulltimer overrides
+      if (overridesRes.data) {
+        const removed = new Set<string>();
+        for (const o of overridesRes.data as any[]) {
+          removed.add(`${o.user_id}|${o.date}`);
+        }
+        setRemovedFulltimerDays(removed);
+      } else {
+        setRemovedFulltimerDays(new Set());
+      }
     });
 
     setPendingEdits({});
     setDismissedAvail(new Set());
-    setRemovedFulltimerDays(new Set());
   }, [locationId, weekStart, workers]);
 
   // Sync shiftEdits
