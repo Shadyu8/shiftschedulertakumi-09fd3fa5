@@ -197,7 +197,7 @@ export default function ManagerSchedule() {
   // Dismissed availability
   const [dismissedAvail, setDismissedAvail] = useState<Set<string>>(new Set());
 
-  // Removed fulltimer virtual shifts (per session)
+  // Removed fulltimer virtual shifts (persisted per date)
   const [removedFulltimerDays, setRemovedFulltimerDays] = useState<Set<string>>(new Set());
 
   // Inline editing
