@@ -1175,7 +1175,8 @@ export default function ManagerSchedule() {
                             {workerShifts.map((s) => {
                               if (s.is_fulltimer_auto) {
                                 return (
-                                  <div key={s.id} className="rounded px-1 py-1 bg-primary/10 border border-primary/20 text-xs">
+                                  <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id, s.user_id); }} className="relative rounded px-1 pt-3 pb-1 bg-primary/10 border border-primary/20 text-xs cursor-grab active:cursor-grabbing">
+                                    <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Remove">×</button>
                                     <div className="flex gap-0.5 items-center text-primary font-medium">
                                       <span>{s.start_time}</span>
                                       <span className="text-muted-foreground">–</span>
