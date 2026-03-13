@@ -1145,7 +1145,7 @@ export default function ManagerSchedule() {
           </div>
 
           {/* ── Spreadsheet (table) view ── */}
-          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${viewMode !== "table" ? "hidden" : ""}`}>
+          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${mobileDailyMode ? "hidden md:block" : ""}`}>
             <table className="border-collapse w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="bg-muted border-b border-border">
