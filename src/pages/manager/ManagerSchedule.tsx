@@ -1011,8 +1011,8 @@ export default function ManagerSchedule() {
             </button>
           )}
 
-          {/* ── Desktop Card view ── */}
-          <div className={`hidden md:grid grid-cols-7 gap-2 pb-4 ${viewMode !== "card" ? "!hidden" : ""}`}>
+          {/* ── Spreadsheet view (desktop always, mobile when not daily) ── */}
+          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${mobileDailyMode ? "hidden md:block" : ""}`}>
             {days.map((day) => {
               const dateStr = toLocalDateStr(day);
               const dow = getDayOfWeek(day);
