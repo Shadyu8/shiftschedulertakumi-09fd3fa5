@@ -853,25 +853,18 @@ export default function ManagerSchedule() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            {/* View mode toggle */}
-            <div className="flex items-center gap-1 px-1 mb-2">
-              <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 bg-muted flex-1">
-                <button
-                  onClick={() => setViewMode("card")}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "card" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5 inline mr-1" /> Card
-                </button>
-                <button
-                  onClick={() => setViewMode("table")}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "table" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                >
-                  <TableIcon className="w-3.5 h-3.5 inline mr-1" /> Spreadsheet
-                </button>
-              </div>
+            {/* Daily mode toggle */}
+            <div className="flex items-center justify-between px-1 mb-2">
+              <span className="text-xs font-medium text-muted-foreground">Daily view</span>
+              <button
+                onClick={() => setMobileDailyMode((v) => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${mobileDailyMode ? "bg-primary" : "bg-input"}`}
+              >
+                <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${mobileDailyMode ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
             </div>
-            {/* Day selector tabs — only in card view */}
-            {viewMode === "card" && (
+            {/* Day selector tabs — only in daily mode */}
+            {mobileDailyMode && (
               <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
                 {days.map((day, i) => {
                   const label = day.toLocaleDateString("en-GB", { weekday: "short" });
