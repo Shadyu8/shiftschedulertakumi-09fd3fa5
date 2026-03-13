@@ -1247,8 +1247,9 @@ export default function ManagerSchedule() {
                                 );
                               }
                               const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                              const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
                               return (
-                                <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                                <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id, isFulltimerReal ? s.user_id : undefined); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                                   <button onClick={() => deleteShift(s.id)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Remove">×</button>
                                   {s.standby && <span className="text-xs text-muted-foreground block mb-0.5">Standby</span>}
                                   <div className="flex gap-0.5 items-center">
@@ -1256,6 +1257,7 @@ export default function ManagerSchedule() {
                                     <span className="text-muted-foreground text-xs shrink-0">–</span>
                                     <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                                   </div>
+                                  {isFulltimerReal && <span className="text-[9px] text-muted-foreground">Fulltimer</span>}
                                 </div>
                               );
                             })}
