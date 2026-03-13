@@ -1001,8 +1001,8 @@ export default function ManagerSchedule() {
           </div>
           )}
 
-          {/* ── Mobile FAB (card view only) ── */}
-          {viewMode === "card" && (
+          {/* ── Mobile FAB (daily mode only) ── */}
+          {mobileDailyMode && (
             <button
               className="md:hidden fixed bottom-20 right-6 z-30 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-full shadow-lg px-5 py-3 flex items-center gap-2"
               onClick={() => { setAddWorkerModal({ date: selectedDateStr }); setAddWorkerSearch(""); }}
