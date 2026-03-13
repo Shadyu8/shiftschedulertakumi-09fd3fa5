@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Send, Plus, LayoutGrid, Table as TableIcon, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Send, Plus, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfWeek, addDays, getDay } from "date-fns";
 
