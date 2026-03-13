@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, ChevronRight, Send, Plus, LayoutGrid, Table as TableIcon, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Send, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfWeek, addDays, getDay } from "date-fns";
 
@@ -162,8 +162,8 @@ export default function ManagerSchedule() {
     latest_shift_end: "23:00",
   });
 
-  // View mode
-  const [viewMode, setViewMode] = useState<"card" | "table">("card");
+  // Mobile daily view toggle
+  const [mobileDailyMode, setMobileDailyMode] = useState(true);
 
   // Add shift modal
   const [modal, setModal] = useState<{
@@ -814,21 +814,7 @@ export default function ManagerSchedule() {
           </Button>
         </div>
 
-        {/* View mode toggle */}
-        <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-muted">
-          <button
-            onClick={() => setViewMode("card")}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${viewMode === "card" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <LayoutGrid className="w-4 h-4 inline mr-1" /> Card
-          </button>
-          <button
-            onClick={() => setViewMode("table")}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${viewMode === "table" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <TableIcon className="w-4 h-4 inline mr-1" /> Spreadsheet
-          </button>
-        </div>
+        {/* Spacer - view mode toggle removed */}
 
         {locationId && (
           <Button onClick={publishAll} disabled={publishing || !canPublish} className="ml-auto">
@@ -867,25 +853,18 @@ export default function ManagerSchedule() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            {/* View mode toggle */}
-            <div className="flex items-center gap-1 px-1 mb-2">
-              <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 bg-muted flex-1">
-                <button
-                  onClick={() => setViewMode("card")}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "card" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5 inline mr-1" /> Card
-                </button>
-                <button
-                  onClick={() => setViewMode("table")}
-                  className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${viewMode === "table" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-                >
-                  <TableIcon className="w-3.5 h-3.5 inline mr-1" /> Spreadsheet
-                </button>
-              </div>
+            {/* Daily mode toggle */}
+            <div className="flex items-center justify-between px-1 mb-2">
+              <span className="text-xs font-medium text-muted-foreground">Daily view</span>
+              <button
+                onClick={() => setMobileDailyMode((v) => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${mobileDailyMode ? "bg-primary" : "bg-input"}`}
+              >
+                <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${mobileDailyMode ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
             </div>
-            {/* Day selector tabs — only in card view */}
-            {viewMode === "card" && (
+            {/* Day selector tabs — only in daily mode */}
+            {mobileDailyMode && (
               <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
                 {days.map((day, i) => {
                   const label = day.toLocaleDateString("en-GB", { weekday: "short" });
@@ -910,8 +889,8 @@ export default function ManagerSchedule() {
 
       {locationId && (
         <>
-          {/* ── Mobile day view (card only) ── */}
-          {viewMode === "card" && (
+          {/* ── Mobile daily view ── */}
+          {mobileDailyMode && (
           <div className="md:hidden space-y-2 pb-24">
             {selectedAllWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
               <p className="text-sm text-muted-foreground text-center mt-6">No workers found</p>
@@ -1022,8 +1001,8 @@ export default function ManagerSchedule() {
           </div>
           )}
 
-          {/* ── Mobile FAB (card view only) ── */}
-          {viewMode === "card" && (
+          {/* ── Mobile FAB (daily mode only) ── */}
+          {mobileDailyMode && (
             <button
               className="md:hidden fixed bottom-20 right-6 z-30 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-full shadow-lg px-5 py-3 flex items-center gap-2"
               onClick={() => { setAddWorkerModal({ date: selectedDateStr }); setAddWorkerSearch(""); }}
@@ -1031,131 +1010,6 @@ export default function ManagerSchedule() {
               <Plus className="w-4 h-4" /> Add worker
             </button>
           )}
-
-          {/* ── Desktop Card view ── */}
-          <div className={`hidden md:grid grid-cols-7 gap-2 pb-4 ${viewMode !== "card" ? "!hidden" : ""}`}>
-            {days.map((day) => {
-              const dateStr = toLocalDateStr(day);
-              const dow = getDayOfWeek(day);
-              const availableWorkers = availabilities.filter((ua) => {
-                const avail = ua.availability[dow];
-                return avail && avail.available && avail.preset !== "UNAVAILABLE";
-              });
-              const dayShifts = allShiftsForDisplay.filter((s) => s.date === dateStr);
-              const isDropTarget = dragOverDate === dateStr;
-
-              return (
-                <div
-                  key={dateStr}
-                  className={`min-w-0 flex flex-col gap-2 rounded-xl transition-colors ${isDropTarget ? "bg-primary/5 ring-2 ring-primary/40" : ""}`}
-                  onDragOver={(e) => handleDragOver(e, dateStr)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, dateStr)}
-                >
-                  <div className={`text-center text-sm font-semibold rounded-lg px-2 py-2 ${dateStr === todayStr ? "bg-primary/10 text-primary" : "bg-muted text-foreground"}`}>
-                    {formatDayWithDate(day)}
-                  </div>
-                  {availableWorkers.length === 0 && dayShifts.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center mt-2">No availability</p>
-                  )}
-                  {availableWorkers.flatMap((ua) => {
-                    const avail = ua.availability[dow];
-                    const workerShifts = dayShifts.filter((s) => s.user_id === ua.userId);
-                    const pendingEdit = getPendingEdit(ua.userId, dateStr, avail);
-                    const availKey = `${ua.userId}|${dateStr}`;
-                    const isDismissed = dismissedAvail.has(availKey);
-
-                    if (workerShifts.length > 0) {
-                      return workerShifts.map((s) => {
-                        if (s.is_fulltimer_auto) {
-                          return (
-                            <div key={s.id} draggable onDragStart={() => handleDragStart(s.id, s.user_id)} className="relative bg-primary/5 border border-primary/20 rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
-                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
-                              <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
-                                <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
-                                <span className="text-xs text-primary bg-primary/10 rounded px-1 shrink-0">FT</span>
-                              </div>
-                              <div className="px-2 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
-                                <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                                  <span>{s.start_time}</span>
-                                  <span className="text-muted-foreground">–</span>
-                                  <span>{s.end_time}</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-                        const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
-                        const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
-                        return (
-                          <div key={s.id} draggable onDragStart={() => handleDragStart(s.id, isFulltimerReal ? s.user_id : undefined)} className={`relative rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing ${isFulltimerReal ? "bg-primary/5 border border-primary/20" : "bg-card border border-border"}`}>
-                            <button onClick={() => deleteShift(s.id)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
-                            <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
-                              <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
-                              {formatAvailLabel(avail) && (
-                                <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1 shrink-0">{formatAvailLabel(avail)}</span>
-                              )}
-                            </div>
-                            <div className={`px-2 py-1.5 rounded-lg ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                              {s.standby && <p className="text-muted-foreground text-xs mb-1">Standby</p>}
-                              <div className="flex items-center gap-1">
-                                <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                                <span className="text-muted-foreground text-xs shrink-0">–</span>
-                                <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                              </div>
-                            </div>
-                            {isFulltimerReal && <span className="text-[10px] text-muted-foreground mt-1 block">Fulltimer</span>}
-                          </div>
-                        );
-                      });
-                    }
-                    if (isDismissed) return [];
-                    return [(
-                      <div key={ua.userId} className="relative bg-card border border-border rounded-xl p-3 shadow-sm">
-                        <button onClick={() => setDismissConfirm({ key: availKey })} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Dismiss">×</button>
-                        <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
-                          <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
-                          {formatAvailLabel(avail) && (
-                            <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1 shrink-0">{formatAvailLabel(avail)}</span>
-                          )}
-                        </div>
-                        <div className="px-2 py-1.5 rounded-lg bg-warning/10 border border-dashed border-warning/30">
-                          <div className="flex items-center gap-1">
-                                <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, dateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, dateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, dateStr, { startTime: v, endTime: newEnd }); }} />
-                            <span className="text-muted-foreground text-xs shrink-0">–</span>
-                            <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, dateStr, avail, "endTime", v); savePendingShift(ua.userId, dateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
-                          </div>
-                        </div>
-                      </div>
-                    )];
-                  })}
-                  {/* Workers with shifts but not in orderedAvailabilities */}
-                  {dayShifts.filter((s) => !orderedAvailabilities.find((ua) => ua.userId === s.user_id)).map((s) => {
-                    const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
-                    return (
-                      <div key={s.id} draggable onDragStart={() => handleDragStart(s.id)} className="relative bg-card border border-border rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
-                        <button onClick={() => deleteShift(s.id)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
-                        <div className="font-semibold text-foreground text-sm mb-1.5 pr-6">{s.profile?.full_name ?? "Unknown"}</div>
-                        <div className={`px-2 py-1.5 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                          <div className="flex items-center gap-1">
-                            <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                            <span className="text-muted-foreground text-xs shrink-0">–</span>
-                            <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <button
-                    onClick={() => { setAddWorkerModal({ date: dateStr }); setAddWorkerSearch(""); }}
-                    className="w-full text-center text-muted-foreground hover:text-primary text-xs border border-dashed border-border rounded-md py-1.5 hover:border-primary mt-1 transition-colors"
-                  >
-                    + Add worker
-                  </button>
-                </div>
-              );
-            })}
-          </div>
 
           {/* Legend */}
           <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -1166,7 +1020,7 @@ export default function ManagerSchedule() {
           </div>
 
           {/* ── Spreadsheet (table) view ── */}
-          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${viewMode !== "table" ? "hidden" : ""}`}>
+          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${mobileDailyMode ? "hidden md:block" : ""}`}>
             <table className="border-collapse w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="bg-muted border-b border-border">
