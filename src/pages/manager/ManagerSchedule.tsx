@@ -960,8 +960,9 @@ export default function ManagerSchedule() {
                           );
                         }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                        const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
                         return (
-                          <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                          <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                             <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
                             {s.standby && <p className="text-xs text-muted-foreground mb-1">Standby</p>}
                             <div className="flex items-center gap-1">
@@ -969,6 +970,7 @@ export default function ManagerSchedule() {
                               <span className="text-muted-foreground text-sm shrink-0">–</span>
                               <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                             </div>
+                            {isFulltimerReal && <span className="text-[10px] text-muted-foreground">Fulltimer</span>}
                           </div>
                         );
                       })}
@@ -1084,8 +1086,9 @@ export default function ManagerSchedule() {
                           );
                         }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                        const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
                         return (
-                          <div key={s.id} draggable onDragStart={() => handleDragStart(s.id)} className="relative bg-card border border-border rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing">
+                          <div key={s.id} draggable onDragStart={() => handleDragStart(s.id, isFulltimerReal ? s.user_id : undefined)} className={`relative rounded-xl p-3 shadow-sm cursor-grab active:cursor-grabbing ${isFulltimerReal ? "bg-primary/5 border border-primary/20" : "bg-card border border-border"}`}>
                             <button onClick={() => deleteShift(s.id)} className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-destructive/60 hover:bg-destructive/10 hover:text-destructive transition-all text-sm" title="Remove">×</button>
                             <div className="flex items-start gap-1 mb-2 flex-wrap pr-6">
                               <span className="font-semibold text-foreground text-sm leading-tight">{ua.fullName}</span>
@@ -1093,7 +1096,7 @@ export default function ManagerSchedule() {
                                 <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1 shrink-0">{formatAvailLabel(avail)}</span>
                               )}
                             </div>
-                            <div className={`px-2 py-1.5 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                            <div className={`px-2 py-1.5 rounded-lg ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                               {s.standby && <p className="text-muted-foreground text-xs mb-1">Standby</p>}
                               <div className="flex items-center gap-1">
                                 <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
@@ -1101,6 +1104,7 @@ export default function ManagerSchedule() {
                                 <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                               </div>
                             </div>
+                            {isFulltimerReal && <span className="text-[10px] text-muted-foreground mt-1 block">Fulltimer</span>}
                           </div>
                         );
                       });
@@ -1243,8 +1247,9 @@ export default function ManagerSchedule() {
                                 );
                               }
                               const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                              const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
                               return (
-                                <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                                <div key={s.id} draggable onDragStart={(e) => { e.stopPropagation(); handleDragStart(s.id, isFulltimerReal ? s.user_id : undefined); }} className={`relative rounded px-1 pt-3 pb-1 cursor-grab active:cursor-grabbing ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                                   <button onClick={() => deleteShift(s.id)} className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-card hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-full text-xs flex items-center justify-center leading-none font-bold border border-border hover:border-destructive/30 transition-colors" title="Remove">×</button>
                                   {s.standby && <span className="text-xs text-muted-foreground block mb-0.5">Standby</span>}
                                   <div className="flex gap-0.5 items-center">
@@ -1252,6 +1257,7 @@ export default function ManagerSchedule() {
                                     <span className="text-muted-foreground text-xs shrink-0">–</span>
                                     <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                                   </div>
+                                  {isFulltimerReal && <span className="text-[9px] text-muted-foreground">Fulltimer</span>}
                                 </div>
                               );
                             })}
