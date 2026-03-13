@@ -889,8 +889,8 @@ export default function ManagerSchedule() {
 
       {locationId && (
         <>
-          {/* ── Mobile day view (card only) ── */}
-          {viewMode === "card" && (
+          {/* ── Mobile daily view ── */}
+          {mobileDailyMode && (
           <div className="md:hidden space-y-2 pb-24">
             {selectedAllWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
               <p className="text-sm text-muted-foreground text-center mt-6">No workers found</p>
