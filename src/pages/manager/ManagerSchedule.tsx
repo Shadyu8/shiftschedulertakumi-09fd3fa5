@@ -814,21 +814,7 @@ export default function ManagerSchedule() {
           </Button>
         </div>
 
-        {/* View mode toggle */}
-        <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-muted">
-          <button
-            onClick={() => setViewMode("card")}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${viewMode === "card" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <LayoutGrid className="w-4 h-4 inline mr-1" /> Card
-          </button>
-          <button
-            onClick={() => setViewMode("table")}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${viewMode === "table" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            <TableIcon className="w-4 h-4 inline mr-1" /> Spreadsheet
-          </button>
-        </div>
+        {/* Spacer - view mode toggle removed */}
 
         {locationId && (
           <Button onClick={publishAll} disabled={publishing || !canPublish} className="ml-auto">
