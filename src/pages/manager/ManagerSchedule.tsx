@@ -162,8 +162,8 @@ export default function ManagerSchedule() {
     latest_shift_end: "23:00",
   });
 
-  // View mode
-  const [viewMode, setViewMode] = useState<"card" | "table">("card");
+  // Mobile daily view toggle
+  const [mobileDailyMode, setMobileDailyMode] = useState(true);
 
   // Add shift modal
   const [modal, setModal] = useState<{
