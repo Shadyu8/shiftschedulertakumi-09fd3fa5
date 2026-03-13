@@ -960,8 +960,9 @@ export default function ManagerSchedule() {
                           );
                         }
                         const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                        const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
                         return (
-                          <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                          <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
                             <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
                             {s.standby && <p className="text-xs text-muted-foreground mb-1">Standby</p>}
                             <div className="flex items-center gap-1">
@@ -969,6 +970,7 @@ export default function ManagerSchedule() {
                               <span className="text-muted-foreground text-sm shrink-0">–</span>
                               <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                             </div>
+                            {isFulltimerReal && <span className="text-[10px] text-muted-foreground">Fulltimer</span>}
                           </div>
                         );
                       })}
