@@ -207,9 +207,7 @@ export default function ManagerSchedule() {
   const pendingEditsRef = useRef(pendingEdits);
   pendingEditsRef.current = pendingEdits;
 
-  // Mobile day view
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
+  // (mobile daily view state removed)
 
   const [publishing, setPublishing] = useState(false);
 
