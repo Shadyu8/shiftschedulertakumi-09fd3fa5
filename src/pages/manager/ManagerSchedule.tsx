@@ -891,113 +891,115 @@ export default function ManagerSchedule() {
         <>
           {/* ── Mobile daily view ── */}
           {mobileDailyMode && (
-          <div className="md:hidden space-y-2 pb-24">
+          <div className="md:hidden pb-24">
             {selectedAllWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
               <p className="text-sm text-muted-foreground text-center mt-6">No workers found</p>
             )}
+            <div className="divide-y divide-border border border-border rounded-xl bg-card overflow-hidden">
             {selectedAllWorkers.map((ua) => {
               const avail = ua.availability[selectedDow];
               const workerShifts = selectedDayShifts.filter((s) => s.user_id === ua.userId);
-              const isExpanded = expandedWorkers.has(ua.userId);
               const pendingEdit = getPendingEdit(ua.userId, selectedDateStr, avail);
               const availKey = `${ua.userId}|${selectedDateStr}`;
               const isDismissed = dismissedAvail.has(availKey);
-              if (isDismissed && workerShifts.length === 0) return null;
+              const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
+              const isFulltimer = workers.find((w) => w.user_id === ua.userId)?.role === "fulltimer";
+              if (isDismissed && workerShifts.length === 0 && !isAvailable) return null;
 
               return (
-                <div key={ua.userId} className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                  <button className="w-full flex items-center justify-between px-4 py-3 text-left" onClick={() => toggleWorkerExpand(ua.userId)}>
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <div key={ua.userId} className="px-3 py-2.5">
+                  {/* Worker name row */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className="font-semibold text-foreground text-sm truncate">{ua.fullName}</span>
-                      {formatAvailLabel(avail) && (
-                        <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1.5 py-0.5 shrink-0">
-                          {formatAvailLabel(avail)}
-                        </span>
-                      )}
-                      {workerShifts.length > 0 && (
-                        <span className="text-xs bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-semibold shrink-0">
-                          {workerShifts.length}
-                        </span>
-                      )}
+                      {isFulltimer && <span className="text-[10px] text-primary bg-primary/10 rounded px-1.5 py-0.5 font-medium">FT</span>}
                     </div>
-                    <span className="text-muted-foreground text-sm ml-2">{isExpanded ? "▲" : "▼"}</span>
-                  </button>
-                  {isExpanded && (
-                    <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
-                      {workerShifts.map((s) => {
-                        if (s.is_fulltimer_auto) {
-                          return (
-                            <div key={s.id} className="relative px-3 pt-6 pb-2 rounded-lg bg-primary/10 border border-primary/20">
-                              <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
-                              <div className="flex items-center gap-1 text-primary font-medium">
-                                <span>{s.start_time}</span>
-                                <span className="text-muted-foreground text-sm">–</span>
-                                <span>{s.end_time}</span>
-                              </div>
-                              <span className="text-[10px] text-muted-foreground">Fulltimer</span>
-                            </div>
-                          );
-                        }
-                        const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
-                        const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
-                        return (
-                          <div key={s.id} className={`relative px-3 pt-6 pb-2 rounded-lg ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                            <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
-                            {s.standby && <p className="text-xs text-muted-foreground mb-1">Standby</p>}
-                            <div className="flex items-center gap-1">
-                              <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                              <span className="text-muted-foreground text-sm shrink-0">–</span>
-                              <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                            </div>
-                            {isFulltimerReal && <span className="text-[10px] text-muted-foreground">Fulltimer</span>}
+                    {formatAvailLabel(avail) && workerShifts.length === 0 && (
+                      <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1.5 py-0.5 shrink-0">
+                        {formatAvailLabel(avail)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Shifts inline */}
+                  {workerShifts.map((s) => {
+                    if (s.is_fulltimer_auto) {
+                      return (
+                        <div key={s.id} className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 mb-1.5">
+                          <div className="flex items-center gap-1 flex-1 text-primary font-medium text-sm">
+                            <span>{s.start_time}</span>
+                            <span className="text-muted-foreground">–</span>
+                            <span>{s.end_time}</span>
                           </div>
-                        );
-                      })}
-                      {workerShifts.length === 0 && !isDismissed && (
-                        <div className="relative px-3 pt-6 pb-2 rounded-lg bg-warning/10 border border-warning/20">
-                          <button onClick={() => setDismissConfirm({ key: availKey })} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Dismiss">×</button>
-                          <div className="flex items-center gap-1">
-                             <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
-                            <span className="text-muted-foreground text-sm shrink-0">–</span>
-                            <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
-                          </div>
+                          <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
                         </div>
-                      )}
+                      );
+                    }
+                    const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
+                    const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
+                    return (
+                      <div key={s.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 mb-1.5 ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                        {s.standby && <span className="text-[10px] text-muted-foreground mr-1">SB</span>}
+                        <div className="flex items-center gap-1 flex-1">
+                          <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
+                          <span className="text-muted-foreground text-sm shrink-0">–</span>
+                          <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
+                        </div>
+                        <button onClick={() => deleteShift(s.id)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
+                      </div>
+                    );
+                  })}
+                  {/* Availability pending (no shift yet) */}
+                  {workerShifts.length === 0 && isAvailable && !isDismissed && (
+                    <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-warning/10 border border-dashed border-warning/30">
+                      <div className="flex items-center gap-1 flex-1">
+                        <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
+                        <span className="text-muted-foreground text-sm shrink-0">–</span>
+                        <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
+                      </div>
+                      <button onClick={() => setDismissConfirm({ key: availKey })} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Dismiss">×</button>
                     </div>
+                  )}
+                  {/* Empty — add shift inline */}
+                  {workerShifts.length === 0 && (!isAvailable || isDismissed) && (
+                    <button
+                      onClick={async () => {
+                        const dayAvail = isDismissed && isAvailable ? avail : undefined;
+                        const st = dayAvail?.startTime ?? "";
+                        const et = dayAvail?.endTime ?? "";
+                        const { error } = await supabase.from("shifts").insert({ user_id: ua.userId, location_id: locationId, date: selectedDateStr, start_time: st, end_time: et, standby: false });
+                        if (error) { toast.error(error.message); return; }
+                        refreshShifts();
+                      }}
+                      className="w-full py-2 flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors text-sm border border-dashed border-border hover:border-primary/30"
+                    >
+                      + Add shift
+                    </button>
                   )}
                 </div>
               );
             })}
-            {/* Workers with shifts but no availability for this day */}
+            {/* Workers with shifts but not in orderedAvailabilities */}
             {selectedDayShifts
               .filter((s) => !orderedAvailabilities.find((ua) => ua.userId === s.user_id))
               .map((s) => {
-                const isExpanded = expandedWorkers.has(s.user_id);
                 const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
                 return (
-                  <div key={s.id} className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-                    <button className="w-full flex items-center justify-between px-4 py-3 text-left" onClick={() => toggleWorkerExpand(s.user_id)}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-semibold text-foreground text-sm truncate">{s.profile?.full_name ?? "Unknown"}</span>
-                        <span className="text-xs bg-primary/10 text-primary rounded-full px-1.5 py-0.5 font-semibold shrink-0">1</span>
+                  <div key={s.id} className="px-3 py-2.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="font-semibold text-foreground text-sm truncate">{s.profile?.full_name ?? "Unknown"}</span>
+                    </div>
+                    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
+                      <div className="flex items-center gap-1 flex-1">
+                        <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
+                        <span className="text-muted-foreground text-sm shrink-0">–</span>
+                        <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
                       </div>
-                      <span className="text-muted-foreground text-sm ml-2">{isExpanded ? "▲" : "▼"}</span>
-                    </button>
-                    {isExpanded && (
-                      <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
-                        <div className={`relative px-3 pt-6 pb-2 rounded-lg ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                          <button onClick={() => deleteShift(s.id)} className="absolute top-1 right-2 text-destructive hover:text-destructive/80 font-bold text-lg leading-none" title="Remove shift">×</button>
-                          <div className="flex items-center gap-1">
-                            <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                            <span className="text-muted-foreground text-sm shrink-0">–</span>
-                            <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                      <button onClick={() => deleteShift(s.id)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
+                    </div>
                   </div>
                 );
               })}
+            </div>
           </div>
           )}
 
