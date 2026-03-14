@@ -162,8 +162,7 @@ export default function ManagerSchedule() {
     latest_shift_end: "23:00",
   });
 
-  // Mobile daily view toggle
-  const [mobileDailyMode, setMobileDailyMode] = useState(true);
+  // Mobile daily view removed
 
   // Add shift modal
   const [modal, setModal] = useState<{
