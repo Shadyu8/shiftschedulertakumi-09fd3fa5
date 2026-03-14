@@ -715,14 +715,6 @@ export default function ManagerSchedule() {
     setNewShift({ startTime: dayAvail?.startTime ?? "", endTime: dayAvail?.endTime ?? "", standby: false });
   }
 
-  // Mobile helpers
-  const selectedDay = days[selectedDayIndex];
-  const selectedDateStr = toLocalDateStr(selectedDay);
-  const selectedDow = getDayOfWeek(selectedDay);
-  // Show all workers for the selected day (available ones first, then others)
-  const selectedAllWorkers = orderedAvailabilities;
-  const selectedDayShifts = allShiftsForDisplay.filter((s) => s.date === selectedDateStr);
-
   // Workers for add modal
   const addWorkerModalDow = addWorkerModal ? getDayOfWeek(new Date(addWorkerModal.date + "T12:00:00")) : null;
   const filteredWorkers = workers
@@ -739,15 +731,6 @@ export default function ManagerSchedule() {
       if (!a.hasAvailForDay && b.hasAvailForDay) return 1;
       return a.full_name.localeCompare(b.full_name);
     });
-
-  function toggleWorkerExpand(userId: string) {
-    setExpandedWorkers((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
-  }
 
   // ── Shared inline time select ──
   function TimeSelect({ value, onChange, allowEmpty = false }: { value: string; onChange: (v: string) => void; allowEmpty?: boolean }) {
