@@ -33,7 +33,6 @@ const roleNavItems: Record<string, NavItem[]> = {
   ],
   shiftleader: [
     { href: "/shiftleader", label: "Dashboard", mobileLabel: "Home", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: "/kiosk", label: "Kiosk", icon: <Monitor className="w-5 h-5" /> },
     { href: "/worker/schedule", label: "My Schedule", mobileLabel: "Schedule", icon: <Calendar className="w-5 h-5" /> },
     { href: "/worker/punches", label: "My Punches", mobileLabel: "Punches", icon: <Clock className="w-5 h-5" /> },
     { href: "/worker/availability", label: "Availability", mobileLabel: "Avail", icon: <ClipboardList className="w-5 h-5" /> },

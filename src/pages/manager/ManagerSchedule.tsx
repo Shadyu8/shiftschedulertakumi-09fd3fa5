@@ -162,8 +162,7 @@ export default function ManagerSchedule() {
     latest_shift_end: "23:00",
   });
 
-  // Mobile daily view toggle
-  const [mobileDailyMode, setMobileDailyMode] = useState(true);
+  // Mobile daily view removed
 
   // Add shift modal
   const [modal, setModal] = useState<{
@@ -208,9 +207,7 @@ export default function ManagerSchedule() {
   const pendingEditsRef = useRef(pendingEdits);
   pendingEditsRef.current = pendingEdits;
 
-  // Mobile day view
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-  const [expandedWorkers, setExpandedWorkers] = useState<Set<string>>(new Set());
+  // (mobile daily view state removed)
 
   const [publishing, setPublishing] = useState(false);
 
@@ -718,14 +715,6 @@ export default function ManagerSchedule() {
     setNewShift({ startTime: dayAvail?.startTime ?? "", endTime: dayAvail?.endTime ?? "", standby: false });
   }
 
-  // Mobile helpers
-  const selectedDay = days[selectedDayIndex];
-  const selectedDateStr = toLocalDateStr(selectedDay);
-  const selectedDow = getDayOfWeek(selectedDay);
-  // Show all workers for the selected day (available ones first, then others)
-  const selectedAllWorkers = orderedAvailabilities;
-  const selectedDayShifts = allShiftsForDisplay.filter((s) => s.date === selectedDateStr);
-
   // Workers for add modal
   const addWorkerModalDow = addWorkerModal ? getDayOfWeek(new Date(addWorkerModal.date + "T12:00:00")) : null;
   const filteredWorkers = workers
@@ -742,15 +731,6 @@ export default function ManagerSchedule() {
       if (!a.hasAvailForDay && b.hasAvailForDay) return 1;
       return a.full_name.localeCompare(b.full_name);
     });
-
-  function toggleWorkerExpand(userId: string) {
-    setExpandedWorkers((prev) => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
-  }
 
   // ── Shared inline time select ──
   function TimeSelect({ value, onChange, allowEmpty = false }: { value: string; onChange: (v: string) => void; allowEmpty?: boolean }) {
@@ -853,165 +833,12 @@ export default function ManagerSchedule() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            {/* Daily mode toggle */}
-            <div className="flex items-center justify-between px-1 mb-2">
-              <span className="text-xs font-medium text-muted-foreground">Daily view</span>
-              <button
-                onClick={() => setMobileDailyMode((v) => !v)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${mobileDailyMode ? "bg-primary" : "bg-input"}`}
-              >
-                <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${mobileDailyMode ? "translate-x-5" : "translate-x-0"}`} />
-              </button>
-            </div>
-            {/* Day selector tabs — only in daily mode */}
-            {mobileDailyMode && (
-              <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
-                {days.map((day, i) => {
-                  const label = day.toLocaleDateString("en-GB", { weekday: "short" });
-                  const num = day.getDate();
-                  const isSelected = i === selectedDayIndex;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => { setSelectedDayIndex(i); setExpandedWorkers(new Set()); }}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
-                    >
-                      <span>{label}</span>
-                      <span className="text-sm font-bold">{num}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </>
         )}
       </div>
 
       {locationId && (
         <>
-          {/* ── Mobile daily view ── */}
-          {mobileDailyMode && (
-          <div className="md:hidden pb-24">
-            {selectedAllWorkers.length === 0 && selectedDayShifts.filter((s) => !selectedAllWorkers.find((ua) => ua.userId === s.user_id)).length === 0 && (
-              <p className="text-sm text-muted-foreground text-center mt-6">No workers found</p>
-            )}
-            <div className="divide-y divide-border border border-border rounded-xl bg-card overflow-hidden">
-            {selectedAllWorkers.map((ua) => {
-              const avail = ua.availability[selectedDow];
-              const workerShifts = selectedDayShifts.filter((s) => s.user_id === ua.userId);
-              const pendingEdit = getPendingEdit(ua.userId, selectedDateStr, avail);
-              const availKey = `${ua.userId}|${selectedDateStr}`;
-              const isDismissed = dismissedAvail.has(availKey);
-              const isAvailable = avail && avail.available && avail.preset !== "UNAVAILABLE";
-              const isFulltimer = workers.find((w) => w.user_id === ua.userId)?.role === "fulltimer";
-              if (isDismissed && workerShifts.length === 0 && !isAvailable) return null;
-
-              return (
-                <div key={ua.userId} className="px-3 py-2.5">
-                  {/* Worker name row */}
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-semibold text-foreground text-sm truncate">{ua.fullName}</span>
-                      {isFulltimer && <span className="text-[10px] text-primary bg-primary/10 rounded px-1.5 py-0.5 font-medium">FT</span>}
-                    </div>
-                    {formatAvailLabel(avail) && workerShifts.length === 0 && (
-                      <span className="text-xs text-success bg-success/10 border border-success/20 rounded px-1.5 py-0.5 shrink-0">
-                        {formatAvailLabel(avail)}
-                      </span>
-                    )}
-                  </div>
-                  {/* Shifts inline */}
-                  {workerShifts.map((s) => {
-                    if (s.is_fulltimer_auto) {
-                      return (
-                        <div key={s.id} className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 mb-1.5">
-                          <div className="flex items-center gap-1 flex-1 text-primary font-medium text-sm">
-                            <span>{s.start_time}</span>
-                            <span className="text-muted-foreground">–</span>
-                            <span>{s.end_time}</span>
-                          </div>
-                          <button onClick={() => removeFulltimerVirtualShift(s.user_id, s.date)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
-                        </div>
-                      );
-                    }
-                    const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
-                    const isFulltimerReal = workers.find((w) => w.user_id === s.user_id)?.role === "fulltimer";
-                    return (
-                      <div key={s.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 mb-1.5 ${isFulltimerReal ? "bg-primary/10 border border-primary/20" : s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                        {s.standby && <span className="text-[10px] text-muted-foreground mr-1">SB</span>}
-                        <div className="flex items-center gap-1 flex-1">
-                          <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                          <span className="text-muted-foreground text-sm shrink-0">–</span>
-                          <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                        </div>
-                        <button onClick={() => deleteShift(s.id)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
-                      </div>
-                    );
-                  })}
-                  {/* Availability pending (no shift yet) */}
-                  {workerShifts.length === 0 && isAvailable && !isDismissed && (
-                    <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-warning/10 border border-dashed border-warning/30">
-                      <div className="flex items-center gap-1 flex-1">
-                        <TimeSelect value={pendingEdit.startTime} allowEmpty onChange={(v) => { const newEnd = handleStartTimeChange(pendingEdit.endTime, v); updatePendingEdit(ua.userId, selectedDateStr, avail, "startTime", v); if (newEnd !== pendingEdit.endTime) updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", newEnd); savePendingShift(ua.userId, selectedDateStr, { startTime: v, endTime: newEnd }); }} />
-                        <span className="text-muted-foreground text-sm shrink-0">–</span>
-                        <TimeSelect value={pendingEdit.endTime} allowEmpty onChange={(v) => { updatePendingEdit(ua.userId, selectedDateStr, avail, "endTime", v); savePendingShift(ua.userId, selectedDateStr, { startTime: pendingEdit.startTime, endTime: v }); }} />
-                      </div>
-                      <button onClick={() => setDismissConfirm({ key: availKey })} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Dismiss">×</button>
-                    </div>
-                  )}
-                  {/* Empty — add shift inline */}
-                  {workerShifts.length === 0 && (!isAvailable || isDismissed) && (
-                    <button
-                      onClick={async () => {
-                        const dayAvail = isDismissed && isAvailable ? avail : undefined;
-                        const st = dayAvail?.startTime ?? "";
-                        const et = dayAvail?.endTime ?? "";
-                        const { error } = await supabase.from("shifts").insert({ user_id: ua.userId, location_id: locationId, date: selectedDateStr, start_time: st, end_time: et, standby: false });
-                        if (error) { toast.error(error.message); return; }
-                        refreshShifts();
-                      }}
-                      className="w-full py-2 flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors text-sm border border-dashed border-border hover:border-primary/30"
-                    >
-                      + Add shift
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            {/* Workers with shifts but not in orderedAvailabilities */}
-            {selectedDayShifts
-              .filter((s) => !orderedAvailabilities.find((ua) => ua.userId === s.user_id))
-              .map((s) => {
-                const edit = shiftEdits[s.id] ?? { startTime: s.start_time, endTime: s.end_time };
-                return (
-                  <div key={s.id} className="px-3 py-2.5">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="font-semibold text-foreground text-sm truncate">{s.profile?.full_name ?? "Unknown"}</span>
-                    </div>
-                    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${s.published ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"}`}>
-                      <div className="flex items-center gap-1 flex-1">
-                        <TimeSelect value={edit.startTime} onChange={(v) => { const newEnd = handleStartTimeChange(edit.endTime, v); setShiftEdits((prev) => ({ ...prev, [s.id]: { startTime: v, endTime: newEnd } })); saveShiftTime(s.id, { startTime: v, endTime: newEnd }); }} />
-                        <span className="text-muted-foreground text-sm shrink-0">–</span>
-                        <TimeSelect value={edit.endTime} allowEmpty onChange={(v) => { setShiftEdits((prev) => ({ ...prev, [s.id]: { ...edit, endTime: v } })); saveShiftTime(s.id, { startTime: edit.startTime, endTime: v }); }} />
-                      </div>
-                      <button onClick={() => deleteShift(s.id)} className="text-muted-foreground hover:text-destructive text-lg font-bold leading-none" title="Remove">×</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          )}
-
-          {/* ── Mobile FAB (daily mode only) ── */}
-          {mobileDailyMode && (
-            <button
-              className="md:hidden fixed bottom-20 right-6 z-30 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold rounded-full shadow-lg px-5 py-3 flex items-center gap-2"
-              onClick={() => { setAddWorkerModal({ date: selectedDateStr }); setAddWorkerSearch(""); }}
-            >
-              <Plus className="w-4 h-4" /> Add worker
-            </button>
-          )}
 
           {/* Legend */}
           <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
@@ -1022,7 +849,7 @@ export default function ManagerSchedule() {
           </div>
 
           {/* ── Spreadsheet (table) view ── */}
-          <div className={`overflow-x-auto rounded-xl border border-border shadow-sm ${mobileDailyMode ? "hidden md:block" : ""}`}>
+          <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
             <table className="border-collapse w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="bg-muted border-b border-border">
