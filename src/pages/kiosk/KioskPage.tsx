@@ -212,12 +212,13 @@ export default function KioskPage() {
       if (failedAttempts.current >= MAX_ATTEMPTS) {
         lockoutUntil.current = Date.now() + LOCKOUT_MS;
         failedAttempts.current = 0;
-        setFeedback({ type: "error", message: "Too many failed attempts. Please wait." });
+        toast.error("Too many failed attempts. Please wait.");
       } else {
         // Delay response to slow brute-force
         await new Promise((r) => setTimeout(r, 1500));
-        setFeedback({ type: "error", message: "Invalid PIN" });
+        toast.error("Invalid PIN. Please try again.");
       }
+      setPin("");
       setLookupLoading(false);
       return;
     }
