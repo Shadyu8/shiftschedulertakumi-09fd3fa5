@@ -850,36 +850,6 @@ export default function ManagerSchedule() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
-            {/* Daily mode toggle */}
-            <div className="flex items-center justify-between px-1 mb-2">
-              <span className="text-xs font-medium text-muted-foreground">Daily view</span>
-              <button
-                onClick={() => setMobileDailyMode((v) => !v)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${mobileDailyMode ? "bg-primary" : "bg-input"}`}
-              >
-                <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${mobileDailyMode ? "translate-x-5" : "translate-x-0"}`} />
-              </button>
-            </div>
-            {/* Day selector tabs — only in daily mode */}
-            {mobileDailyMode && (
-              <div className="flex overflow-x-auto gap-1 px-1 no-scrollbar">
-                {days.map((day, i) => {
-                  const label = day.toLocaleDateString("en-GB", { weekday: "short" });
-                  const num = day.getDate();
-                  const isSelected = i === selectedDayIndex;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => { setSelectedDayIndex(i); setExpandedWorkers(new Set()); }}
-                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
-                    >
-                      <span>{label}</span>
-                      <span className="text-sm font-bold">{num}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </>
         )}
       </div>
