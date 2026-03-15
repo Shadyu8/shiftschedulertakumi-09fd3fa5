@@ -26,6 +26,7 @@ interface Worker {
   phone: string | null;
   active: boolean;
   availability_locked: boolean;
+  profile_picture: string | null;
   role?: string;
   staff_type?: string;
   location_ids?: string[];
