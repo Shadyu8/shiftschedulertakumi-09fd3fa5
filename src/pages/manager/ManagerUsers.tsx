@@ -51,6 +51,8 @@ export default function ManagerUsers() {
   const [showCreate, setShowCreate] = useState(false);
   const [createUsername, setCreateUsername] = useState("");
   const [fullName, setFullName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPhone, setCreatePhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
   const [staffType, setStaffType] = useState("floor");
@@ -129,7 +131,7 @@ export default function ManagerUsers() {
   useEffect(() => { fetchWorkers(); }, [profile]);
 
   function resetCreateForm() {
-    setCreateUsername(""); setFullName(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
+    setCreateUsername(""); setFullName(""); setCreateEmail(""); setCreatePhone(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
@@ -147,8 +149,18 @@ export default function ManagerUsers() {
     setConfirmError("");
 
     try {
+      // Look up the manager's email by their username for password verification
+      const { data: managerEmail } = await supabase.rpc("get_email_by_username", {
+        _username: profile?.username || "",
+      });
+      if (!managerEmail) {
+        setConfirmError("Could not verify identity");
+        setCreating(false);
+        return;
+      }
+
       const { error: authErr } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
+        email: managerEmail,
         password: managerPassword,
       });
       if (authErr) {
@@ -159,7 +171,17 @@ export default function ManagerUsers() {
 
       const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { username: createUsername.trim(), full_name: fullName, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
+        body: {
+          username: createUsername.trim(),
+          full_name: fullName,
+          email: createEmail.trim() || null,
+          phone: createPhone.trim() || null,
+          password,
+          role,
+          staff_type: staffType,
+          organization_id: profile?.organization_id,
+          location_ids: locationIds,
+        },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
@@ -401,6 +423,14 @@ export default function ManagerUsers() {
                 <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" required />
               </div>
               <div className="space-y-1.5">
+                <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} placeholder="email@example.com" type="email" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input value={createPhone} onChange={(e) => setCreatePhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
+              </div>
+              <div className="space-y-1.5">
                 <Label>Password</Label>
                 <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" type="password" required />
               </div>
@@ -450,6 +480,8 @@ export default function ManagerUsers() {
               <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
                 <p><span className="text-muted-foreground">Name:</span> {fullName}</p>
                 <p><span className="text-muted-foreground">Username:</span> {createUsername}</p>
+                {createEmail && <p><span className="text-muted-foreground">Email:</span> {createEmail}</p>}
+                {createPhone && <p><span className="text-muted-foreground">Phone:</span> {createPhone}</p>}
                 <p><span className="text-muted-foreground">Role:</span> {roleLabel(role)}</p>
                 <p><span className="text-muted-foreground">Staff Type:</span> {staffType === "kitchen" ? "Kitchen" : "Floor"}</p>
                 {selectedLocation && (
