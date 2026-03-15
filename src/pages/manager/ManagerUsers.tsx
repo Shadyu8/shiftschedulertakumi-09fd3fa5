@@ -131,7 +131,7 @@ export default function ManagerUsers() {
   useEffect(() => { fetchWorkers(); }, [profile]);
 
   function resetCreateForm() {
-    setCreateUsername(""); setFullName(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
+    setCreateUsername(""); setFullName(""); setCreateEmail(""); setCreatePhone(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
