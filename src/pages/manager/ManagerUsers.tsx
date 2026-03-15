@@ -51,6 +51,8 @@ export default function ManagerUsers() {
   const [showCreate, setShowCreate] = useState(false);
   const [createUsername, setCreateUsername] = useState("");
   const [fullName, setFullName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPhone, setCreatePhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
   const [staffType, setStaffType] = useState("floor");
