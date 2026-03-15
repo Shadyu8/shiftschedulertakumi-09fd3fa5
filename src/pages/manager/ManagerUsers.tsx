@@ -49,9 +49,8 @@ export default function ManagerUsers() {
 
   // Create dialog
   const [showCreate, setShowCreate] = useState(false);
-  const [email, setEmail] = useState("");
+  const [createUsername, setCreateUsername] = useState("");
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
   const [staffType, setStaffType] = useState("floor");
