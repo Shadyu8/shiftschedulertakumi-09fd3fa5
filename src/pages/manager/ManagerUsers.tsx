@@ -397,12 +397,8 @@ export default function ManagerUsers() {
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
               </div>
               <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone Number</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
+                <Label>Username</Label>
+                <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
