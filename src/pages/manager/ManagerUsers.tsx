@@ -330,6 +330,10 @@ export default function ManagerUsers() {
         {workers.map((w) => (
           <div key={w.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
+              <Avatar className="h-9 w-9 shrink-0">
+                {w.profile_picture && <AvatarImage src={w.profile_picture} alt={w.full_name} />}
+                <AvatarFallback className="text-xs">{w.full_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-foreground truncate">{w.full_name}</p>
