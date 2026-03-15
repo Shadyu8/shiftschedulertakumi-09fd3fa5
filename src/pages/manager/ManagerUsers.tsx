@@ -129,13 +129,13 @@ export default function ManagerUsers() {
   useEffect(() => { fetchWorkers(); }, [profile]);
 
   function resetCreateForm() {
-    setEmail(""); setFullName(""); setPhone(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
+    setCreateUsername(""); setFullName(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
   function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !fullName.trim() || !password) return;
+    if (!createUsername.trim() || !fullName.trim() || !password) return;
     setPendingCreate(true);
     setConfirmError("");
     setManagerPassword("");
