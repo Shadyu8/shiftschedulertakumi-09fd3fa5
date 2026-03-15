@@ -159,7 +159,7 @@ export default function ManagerUsers() {
 
       const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, phone: phone.trim() || null, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
+        body: { username: createUsername.trim(), full_name: fullName, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
