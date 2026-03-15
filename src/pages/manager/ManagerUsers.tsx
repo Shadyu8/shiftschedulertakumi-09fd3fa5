@@ -366,11 +366,6 @@ export default function ManagerUsers() {
                   <Calendar className="w-4 h-4 text-primary" />
                 </Button>
               )}
-              {w.role !== "fulltimer" && (
-                <Button size="icon" variant="ghost" onClick={() => toggleLock(w.user_id, w.availability_locked)} title={w.availability_locked ? "Unlock availability" : "Lock availability"}>
-                  {w.availability_locked ? <Lock className="w-4 h-4 text-warning" /> : <Unlock className="w-4 h-4" />}
-                </Button>
-              )}
               <Button size="icon" variant="ghost" onClick={() => openEdit(w)} title="Edit user">
                 <Pencil className="w-4 h-4" />
               </Button>
