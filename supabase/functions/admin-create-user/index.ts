@@ -10,6 +10,18 @@ const VALID_ROLES = ["admin", "manager", "shiftleader", "worker", "kiosk", "full
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const DEFAULT_PFPS = [
+  "/pfps/spikenaruto.png",
+  "/pfps/spikesaikik.png",
+  "/pfps/spikegoku.png",
+  "/pfps/spikejotaro.png",
+  "/pfps/spikeluffy.png",
+];
+
+function getRandomPfp(): string {
+  return DEFAULT_PFPS[Math.floor(Math.random() * DEFAULT_PFPS.length)];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -267,12 +279,14 @@ serve(async (req) => {
       });
     }
 
-    // Update profile with organization, phone, and staff_type
+    // Update profile with organization, phone, staff_type, and random profile picture
     if (newUser.user) {
       const profileUpdates: Record<string, any> = {};
       if (organization_id) profileUpdates.organization_id = organization_id;
       if (phone) profileUpdates.phone = phone;
       if (body.staff_type) profileUpdates.staff_type = body.staff_type;
+      // Assign random default profile picture
+      profileUpdates.profile_picture = getRandomPfp();
       if (Object.keys(profileUpdates).length > 0) {
         await adminClient
           .from("profiles")
