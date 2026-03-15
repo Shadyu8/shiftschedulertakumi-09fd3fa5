@@ -449,8 +449,7 @@ export default function ManagerUsers() {
             <div className="space-y-4 mt-2">
               <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
                 <p><span className="text-muted-foreground">Name:</span> {fullName}</p>
-                <p><span className="text-muted-foreground">Email:</span> {email}</p>
-                {phone && <p><span className="text-muted-foreground">Phone:</span> {phone}</p>}
+                <p><span className="text-muted-foreground">Username:</span> {createUsername}</p>
                 <p><span className="text-muted-foreground">Role:</span> {roleLabel(role)}</p>
                 <p><span className="text-muted-foreground">Staff Type:</span> {staffType === "kitchen" ? "Kitchen" : "Floor"}</p>
                 {selectedLocation && (

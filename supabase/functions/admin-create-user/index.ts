@@ -206,17 +206,17 @@ serve(async (req) => {
     }
 
     // Create user
-    const { email, full_name, password, role, organization_id, phone } = body;
+    const { full_name, password, role, organization_id, phone, username } = body;
 
-    if (!email || !full_name || !password || !role) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    if (!full_name || !password || !role || !username) {
+      return new Response(JSON.stringify({ error: "Missing required fields (full_name, username, password, role)" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (typeof email !== "string" || !EMAIL_REGEX.test(email) || email.length > 255) {
-      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+    if (typeof username !== "string" || username.trim().length === 0 || username.length > 100) {
+      return new Response(JSON.stringify({ error: "Username must be 1-100 characters" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -257,12 +257,15 @@ serve(async (req) => {
       });
     }
 
+    // Generate a placeholder email from username since Supabase Auth requires one
+    const email = body.email || `${username.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}@internal.noemail`;
+
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: {
-        username: email,
+        username: username.trim(),
         full_name: full_name.trim(),
         role,
       },
@@ -271,7 +274,7 @@ serve(async (req) => {
     if (createError) {
       console.error("Create user error:", createError);
       const userMessage = createError.message?.includes("already been registered")
-        ? "A user with this email already exists"
+        ? "A user with this username already exists"
         : "Failed to create user";
       return new Response(JSON.stringify({ error: userMessage }), {
         status: 400,
@@ -279,20 +282,19 @@ serve(async (req) => {
       });
     }
 
-    // Update profile with organization, phone, staff_type, and random profile picture
+    // Update profile with organization, phone, staff_type, username override, and random pfp
     if (newUser.user) {
-      const profileUpdates: Record<string, any> = {};
+      const profileUpdates: Record<string, any> = {
+        username: username.trim(),
+        profile_picture: getRandomPfp(),
+      };
       if (organization_id) profileUpdates.organization_id = organization_id;
       if (phone) profileUpdates.phone = phone;
       if (body.staff_type) profileUpdates.staff_type = body.staff_type;
-      // Assign random default profile picture
-      profileUpdates.profile_picture = getRandomPfp();
-      if (Object.keys(profileUpdates).length > 0) {
-        await adminClient
-          .from("profiles")
-          .update(profileUpdates)
-          .eq("user_id", newUser.user.id);
-      }
+      await adminClient
+        .from("profiles")
+        .update(profileUpdates)
+        .eq("user_id", newUser.user.id);
     }
 
     // For kiosk accounts
