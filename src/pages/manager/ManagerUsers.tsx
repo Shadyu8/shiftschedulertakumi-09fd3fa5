@@ -174,12 +174,6 @@ export default function ManagerUsers() {
     }
   }
 
-  async function toggleLock(userId: string, locked: boolean) {
-    const { error } = await supabase.from("profiles").update({ availability_locked: !locked }).eq("user_id", userId);
-    if (error) { toast.error(error.message); return; }
-    fetchWorkers();
-  }
-
   function openEdit(w: Worker) {
     setEditWorker(w);
     setEditName(w.full_name);
