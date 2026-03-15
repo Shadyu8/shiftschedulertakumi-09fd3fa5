@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Lock, Unlock, Pencil, UserX, UserCheck, MapPin, Calendar } from "lucide-react";
+import { Plus, Trash2, Pencil, UserX, UserCheck, MapPin, Calendar } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 
 interface Location {
@@ -25,6 +26,7 @@ interface Worker {
   phone: string | null;
   active: boolean;
   availability_locked: boolean;
+  profile_picture: string | null;
   role?: string;
   staff_type?: string;
   location_ids?: string[];
@@ -47,9 +49,8 @@ export default function ManagerUsers() {
 
   // Create dialog
   const [showCreate, setShowCreate] = useState(false);
-  const [email, setEmail] = useState("");
+  const [createUsername, setCreateUsername] = useState("");
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("worker");
   const [staffType, setStaffType] = useState("floor");
@@ -128,13 +129,13 @@ export default function ManagerUsers() {
   useEffect(() => { fetchWorkers(); }, [profile]);
 
   function resetCreateForm() {
-    setEmail(""); setFullName(""); setPhone(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
+    setCreateUsername(""); setFullName(""); setPassword(""); setRole("worker"); setStaffType("floor"); setSelectedLocation("");
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
   function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim() || !fullName.trim() || !password) return;
+    if (!createUsername.trim() || !fullName.trim() || !password) return;
     setPendingCreate(true);
     setConfirmError("");
     setManagerPassword("");
@@ -158,7 +159,7 @@ export default function ManagerUsers() {
 
       const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, phone: phone.trim() || null, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
+        body: { username: createUsername.trim(), full_name: fullName, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
@@ -171,12 +172,6 @@ export default function ManagerUsers() {
     } finally {
       setCreating(false);
     }
-  }
-
-  async function toggleLock(userId: string, locked: boolean) {
-    const { error } = await supabase.from("profiles").update({ availability_locked: !locked }).eq("user_id", userId);
-    if (error) { toast.error(error.message); return; }
-    fetchWorkers();
   }
 
   function openEdit(w: Worker) {
@@ -335,6 +330,10 @@ export default function ManagerUsers() {
         {workers.map((w) => (
           <div key={w.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
+              <Avatar className="h-9 w-9 shrink-0">
+                {w.profile_picture && <AvatarImage src={w.profile_picture} alt={w.full_name} />}
+                <AvatarFallback className="text-xs">{w.full_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-foreground truncate">{w.full_name}</p>
@@ -365,11 +364,6 @@ export default function ManagerUsers() {
               {w.role === "fulltimer" && (
                 <Button size="icon" variant="ghost" onClick={() => openFtSchedule(w)} title="Fulltimer schedule">
                   <Calendar className="w-4 h-4 text-primary" />
-                </Button>
-              )}
-              {w.role !== "fulltimer" && (
-                <Button size="icon" variant="ghost" onClick={() => toggleLock(w.user_id, w.availability_locked)} title={w.availability_locked ? "Unlock availability" : "Lock availability"}>
-                  {w.availability_locked ? <Lock className="w-4 h-4 text-warning" /> : <Unlock className="w-4 h-4" />}
                 </Button>
               )}
               <Button size="icon" variant="ghost" onClick={() => openEdit(w)} title="Edit user">
@@ -403,12 +397,8 @@ export default function ManagerUsers() {
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
               </div>
               <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone Number</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+31 6 12345678" type="tel" />
+                <Label>Username</Label>
+                <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
@@ -459,8 +449,7 @@ export default function ManagerUsers() {
             <div className="space-y-4 mt-2">
               <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
                 <p><span className="text-muted-foreground">Name:</span> {fullName}</p>
-                <p><span className="text-muted-foreground">Email:</span> {email}</p>
-                {phone && <p><span className="text-muted-foreground">Phone:</span> {phone}</p>}
+                <p><span className="text-muted-foreground">Username:</span> {createUsername}</p>
                 <p><span className="text-muted-foreground">Role:</span> {roleLabel(role)}</p>
                 <p><span className="text-muted-foreground">Staff Type:</span> {staffType === "kitchen" ? "Kitchen" : "Floor"}</p>
                 {selectedLocation && (
