@@ -149,8 +149,18 @@ export default function ManagerUsers() {
     setConfirmError("");
 
     try {
+      // Look up the manager's email by their username for password verification
+      const { data: managerEmail } = await supabase.rpc("get_email_by_username", {
+        _username: profile?.username || "",
+      });
+      if (!managerEmail) {
+        setConfirmError("Could not verify identity");
+        setCreating(false);
+        return;
+      }
+
       const { error: authErr } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
+        email: managerEmail,
         password: managerPassword,
       });
       if (authErr) {
@@ -161,7 +171,17 @@ export default function ManagerUsers() {
 
       const locationIds = selectedLocation ? [selectedLocation] : [];
       const res = await supabase.functions.invoke("admin-create-user", {
-        body: { username: createUsername.trim(), full_name: fullName, password, role, staff_type: staffType, organization_id: profile?.organization_id, location_ids: locationIds },
+        body: {
+          username: createUsername.trim(),
+          full_name: fullName,
+          email: createEmail.trim() || null,
+          phone: createPhone.trim() || null,
+          password,
+          role,
+          staff_type: staffType,
+          organization_id: profile?.organization_id,
+          location_ids: locationIds,
+        },
       });
       if (res.error) throw res.error;
       if (res.data?.error) throw new Error(res.data.error);
