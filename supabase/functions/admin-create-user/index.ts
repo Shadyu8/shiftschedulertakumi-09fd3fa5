@@ -206,10 +206,11 @@ serve(async (req) => {
     }
 
     // Create user
-    const { full_name, password, role, organization_id, phone, username } = body;
+    const { full_name, password, role, organization_id, phone } = body;
+    const username = body.username || body.email;
 
     if (!full_name || !password || !role || !username) {
-      return new Response(JSON.stringify({ error: "Missing required fields (full_name, username, password, role)" }), {
+      return new Response(JSON.stringify({ error: "Missing required fields (full_name, username or email, password, role)" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
