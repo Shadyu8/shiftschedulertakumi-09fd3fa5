@@ -236,13 +236,18 @@ export default function ManagerUsers() {
         },
       });
       if (res.error) throw res.error;
-      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.error) {
+        // Show server-side errors as confirm step errors
+        setConfirmError(res.data.error);
+        setCreating(false);
+        return;
+      }
       toast.success("User created");
       resetCreateForm();
       setShowCreate(false);
       fetchWorkers();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create user");
+      setConfirmError(err.message || "Failed to create user");
     } finally {
       setCreating(false);
     }
