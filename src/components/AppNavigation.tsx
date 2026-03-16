@@ -94,8 +94,8 @@ export default function AppNavigation() {
         <div className={`py-5 border-b border-sidebar-border flex items-center ${sidebarOpen ? "px-4 justify-between" : "px-2 justify-center flex-col gap-2"}`}>
           {sidebarOpen ? (
             <Link to="/" className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0 overflow-hidden">
-                <img src="/icon.png" alt="Logo" className="w-7 h-7 object-contain" />
+              <div className="w-9 h-9 rounded-lg shrink-0 overflow-hidden">
+                <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
               </div>
               <div className="min-w-0">
                 <h1 className="font-bold text-sidebar-foreground text-lg leading-tight">Spike's Planner</h1>
