@@ -135,9 +135,61 @@ export default function ManagerUsers() {
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
+  const [createError, setCreateError] = useState("");
+
   function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (!createUsername.trim() || !fullName.trim() || !password) return;
+    setCreateError("");
+
+    const trimmedUsername = createUsername.trim();
+    const trimmedName = fullName.trim();
+
+    if (!trimmedUsername) {
+      setCreateError("Username is required");
+      return;
+    }
+    if (trimmedUsername.length < 3) {
+      setCreateError("Username must be at least 3 characters");
+      return;
+    }
+    if (trimmedUsername.length > 100) {
+      setCreateError("Username must be less than 100 characters");
+      return;
+    }
+    if (!trimmedName) {
+      setCreateError("Full name is required");
+      return;
+    }
+    if (trimmedName.length > 100) {
+      setCreateError("Full name must be less than 100 characters");
+      return;
+    }
+    if (!password) {
+      setCreateError("Password is required");
+      return;
+    }
+    if (password.length < 8) {
+      setCreateError("Password must be at least 8 characters");
+      return;
+    }
+    if (password.length > 128) {
+      setCreateError("Password must be less than 128 characters");
+      return;
+    }
+    if (createEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createEmail.trim())) {
+      setCreateError("Invalid email address");
+      return;
+    }
+
+    // Check if username already exists among current workers
+    const usernameTaken = workers.some(
+      (w) => w.username.toLowerCase() === trimmedUsername.toLowerCase()
+    );
+    if (usernameTaken) {
+      setCreateError("A user with this username already exists");
+      return;
+    }
+
     setPendingCreate(true);
     setConfirmError("");
     setManagerPassword("");
