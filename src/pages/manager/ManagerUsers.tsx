@@ -135,9 +135,61 @@ export default function ManagerUsers() {
     setPendingCreate(false); setManagerPassword(""); setConfirmError("");
   }
 
+  const [createError, setCreateError] = useState("");
+
   function handleCreateStep1(e: React.FormEvent) {
     e.preventDefault();
-    if (!createUsername.trim() || !fullName.trim() || !password) return;
+    setCreateError("");
+
+    const trimmedUsername = createUsername.trim();
+    const trimmedName = fullName.trim();
+
+    if (!trimmedUsername) {
+      setCreateError("Username is required");
+      return;
+    }
+    if (trimmedUsername.length < 3) {
+      setCreateError("Username must be at least 3 characters");
+      return;
+    }
+    if (trimmedUsername.length > 100) {
+      setCreateError("Username must be less than 100 characters");
+      return;
+    }
+    if (!trimmedName) {
+      setCreateError("Full name is required");
+      return;
+    }
+    if (trimmedName.length > 100) {
+      setCreateError("Full name must be less than 100 characters");
+      return;
+    }
+    if (!password) {
+      setCreateError("Password is required");
+      return;
+    }
+    if (password.length < 8) {
+      setCreateError("Password must be at least 8 characters");
+      return;
+    }
+    if (password.length > 128) {
+      setCreateError("Password must be less than 128 characters");
+      return;
+    }
+    if (createEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createEmail.trim())) {
+      setCreateError("Invalid email address");
+      return;
+    }
+
+    // Check if username already exists among current workers
+    const usernameTaken = workers.some(
+      (w) => w.username.toLowerCase() === trimmedUsername.toLowerCase()
+    );
+    if (usernameTaken) {
+      setCreateError("A user with this username already exists");
+      return;
+    }
+
     setPendingCreate(true);
     setConfirmError("");
     setManagerPassword("");
@@ -184,13 +236,18 @@ export default function ManagerUsers() {
         },
       });
       if (res.error) throw res.error;
-      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.error) {
+        // Show server-side errors as confirm step errors
+        setConfirmError(res.data.error);
+        setCreating(false);
+        return;
+      }
       toast.success("User created");
       resetCreateForm();
       setShowCreate(false);
       fetchWorkers();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create user");
+      setConfirmError(err.message || "Failed to create user");
     } finally {
       setCreating(false);
     }
@@ -416,15 +473,15 @@ export default function ManagerUsers() {
             <form onSubmit={handleCreateStep1} className="space-y-4 mt-2">
               <div className="space-y-1.5">
                 <Label>Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
+                <Input value={fullName} onChange={(e) => { setFullName(e.target.value); setCreateError(""); }} placeholder="Full name" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Username</Label>
-                <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" required />
+                <Input value={createUsername} onChange={(e) => { setCreateUsername(e.target.value); setCreateError(""); }} placeholder="Username" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} placeholder="email@example.com" type="email" />
+                <Input value={createEmail} onChange={(e) => { setCreateEmail(e.target.value); setCreateError(""); }} placeholder="email@example.com" type="email" />
               </div>
               <div className="space-y-1.5">
                 <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
@@ -432,7 +489,7 @@ export default function ManagerUsers() {
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" type="password" required />
+                <Input value={password} onChange={(e) => { setPassword(e.target.value); setCreateError(""); }} placeholder="Min. 8 characters" type="password" required />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -469,6 +526,11 @@ export default function ManagerUsers() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {createError && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-md p-3">
+                  {createError}
                 </div>
               )}
               <Button type="submit" className="w-full">
