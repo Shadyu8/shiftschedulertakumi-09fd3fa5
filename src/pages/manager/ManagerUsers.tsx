@@ -473,15 +473,15 @@ export default function ManagerUsers() {
             <form onSubmit={handleCreateStep1} className="space-y-4 mt-2">
               <div className="space-y-1.5">
                 <Label>Full Name</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" required />
+                <Input value={fullName} onChange={(e) => { setFullName(e.target.value); setCreateError(""); }} placeholder="Full name" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Username</Label>
-                <Input value={createUsername} onChange={(e) => setCreateUsername(e.target.value)} placeholder="Username" required />
+                <Input value={createUsername} onChange={(e) => { setCreateUsername(e.target.value); setCreateError(""); }} placeholder="Username" required />
               </div>
               <div className="space-y-1.5">
                 <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} placeholder="email@example.com" type="email" />
+                <Input value={createEmail} onChange={(e) => { setCreateEmail(e.target.value); setCreateError(""); }} placeholder="email@example.com" type="email" />
               </div>
               <div className="space-y-1.5">
                 <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
@@ -489,7 +489,7 @@ export default function ManagerUsers() {
               </div>
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" type="password" required />
+                <Input value={password} onChange={(e) => { setPassword(e.target.value); setCreateError(""); }} placeholder="Min. 8 characters" type="password" required />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
