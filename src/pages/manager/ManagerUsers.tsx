@@ -523,6 +523,11 @@ export default function ManagerUsers() {
                   </Select>
                 </div>
               )}
+              {createError && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-md p-3">
+                  {createError}
+                </div>
+              )}
               <Button type="submit" className="w-full">
                 <Plus className="w-4 h-4 mr-2" /> Continue
               </Button>
