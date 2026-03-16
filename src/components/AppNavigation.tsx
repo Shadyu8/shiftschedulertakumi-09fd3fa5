@@ -103,8 +103,8 @@ export default function AppNavigation() {
               </div>
             </Link>
           ) : (
-            <Link to="/" className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center overflow-hidden">
-              <img src="/icon.png" alt="Logo" className="w-7 h-7 object-contain" />
+            <Link to="/" className="w-9 h-9 rounded-lg overflow-hidden">
+              <img src="/icon.png" alt="Logo" className="w-full h-full object-cover" />
             </Link>
           )}
           <button
