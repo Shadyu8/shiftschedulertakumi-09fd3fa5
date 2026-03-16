@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Pencil, UserX, UserCheck, MapPin, Calendar } from "lucide-react";
+import { Plus, Trash2, Pencil, UserX, UserCheck, MapPin, Calendar, Search } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 
@@ -396,17 +396,54 @@ export default function ManagerUsers() {
     }
   };
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+
+  const ROLE_ORDER: Record<string, number> = { worker: 0, shiftleader: 1, fulltimer: 2, kiosk: 3 };
+
+  const filteredWorkers = workers
+    .filter((w) => {
+      const matchesSearch = w.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.username.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter === "all" || w.role === roleFilter;
+      return matchesSearch && matchesRole;
+    })
+    .sort((a, b) => (ROLE_ORDER[a.role || "worker"] ?? 99) - (ROLE_ORDER[b.role || "worker"] ?? 99));
+
   return (
     <AppLayout>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="page-header">👥 Workers</h1>
         <Button onClick={() => { resetCreateForm(); setShowCreate(true); }}>
           <Plus className="w-4 h-4 mr-2" /> Add User
         </Button>
       </div>
 
+      <div className="flex gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name or username..."
+            className="pl-9"
+          />
+        </div>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All Roles" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            <SelectItem value="worker">Worker</SelectItem>
+            <SelectItem value="shiftleader">Shift Leader</SelectItem>
+            <SelectItem value="fulltimer">Fulltimer</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-3">
-        {workers.map((w) => (
+        {filteredWorkers.map((w) => (
           <div key={w.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
               <Avatar className="h-9 w-9 shrink-0">
@@ -454,7 +491,7 @@ export default function ManagerUsers() {
             </div>
           </div>
         ))}
-        {workers.length === 0 && <p className="text-muted-foreground text-center py-8">No workers yet.</p>}
+        {filteredWorkers.length === 0 && <p className="text-muted-foreground text-center py-8">{searchQuery || roleFilter !== "all" ? "No matching workers found." : "No workers yet."}</p>}
       </div>
 
       {/* Create user dialog */}
