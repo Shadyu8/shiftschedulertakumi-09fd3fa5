@@ -159,7 +159,15 @@ export default function AppNavigation() {
       </aside>
 
       {/* Mobile bottom navigation — no account (moved to top) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t border-border px-1 pt-1 flex justify-around overflow-x-auto" style={{ paddingBottom: 'calc(0.25rem + env(safe-area-inset-bottom))' }}>
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border px-1 pt-1 flex justify-around overflow-x-auto"
+        style={{
+          paddingBottom: 'calc(0.25rem + env(safe-area-inset-bottom))',
+          WebkitUserSelect: 'none',
+          touchAction: 'manipulation',
+        }}
+        onTouchStart={() => {}}
+      >
         {navItems.map((item) => (
           <Link
             key={item.href}
@@ -167,6 +175,7 @@ export default function AppNavigation() {
             className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 shrink-0 ${
               isActive(item.href) ? "text-primary" : "text-muted-foreground"
             }`}
+            style={{ touchAction: 'manipulation' }}
           >
             {item.icon}
             <span className="truncate max-w-[48px]">{item.mobileLabel || item.label}</span>
