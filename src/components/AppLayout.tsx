@@ -1,20 +1,28 @@
 import { ReactNode } from "react";
-import AppNavigation from "./AppNavigation";
+import { useLocation } from "react-router-dom";
+import AppNavigation, { MobileBottomNav, roleNavItems } from "./AppNavigation";
 import { SidebarStateProvider, useSidebarState } from "@/contexts/SidebarContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 function AppLayoutInner({ children }: { children: ReactNode }) {
   const { sidebarOpen } = useSidebarState();
+  const { role } = useAuth();
+  const location = useLocation();
+
+  const navItems = roleNavItems[role || ""] || [];
+  const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + "/");
 
   return (
-    <div className="h-[100dvh] md:min-h-screen bg-background flex flex-col overflow-hidden md:overflow-visible">
+    <div
+      className="h-[100dvh] flex flex-col overflow-hidden md:overflow-visible md:min-h-screen"
+      style={{ backgroundColor: 'hsl(var(--background))' }}
+    >
+      {/* AppNavigation renders: MobileHeader (flex child) + DesktopSidebar (fixed) */}
       <AppNavigation />
-      {/* Mobile top spacer — exactly matches the fixed header height */}
-      <div
-        className="md:hidden shrink-0"
-        style={{ height: 'calc(3rem + env(safe-area-inset-top))' }}
-      />
+
+      {/* Scrollable main content — fills remaining space between header and bottom nav */}
       <main
-        className={`flex-1 min-h-0 overflow-y-auto transition-all duration-200 md:pt-0 md:pb-0 ${sidebarOpen ? "md:ml-64" : "md:ml-16"}`}
+        className={`flex-1 min-h-0 overflow-y-auto transition-all duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-16"}`}
         style={{
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
@@ -24,11 +32,11 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
-      {/* Mobile bottom spacer — exactly matches the fixed bottom nav height */}
-      <div
-        className="md:hidden shrink-0"
-        style={{ height: 'calc(3.5rem + env(safe-area-inset-bottom))' }}
-      />
+
+      {/* Mobile bottom nav — flex child, NOT fixed. Always at bottom of flex column. */}
+      {navItems.length > 0 && (
+        <MobileBottomNav navItems={navItems} isActive={isActive} />
+      )}
     </div>
   );
 }
