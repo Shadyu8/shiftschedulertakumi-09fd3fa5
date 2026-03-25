@@ -77,7 +77,7 @@ function MobileHeader({ profilePic }: { profilePic?: string | null }) {
 /* ─── Mobile Bottom Nav ─── */
 function MobileBottomNav({ navItems, isActive }: { navItems: NavItem[]; isActive: (href: string) => boolean }) {
   return (
-    <nav className="md:hidden bg-card border-t border-border px-1 py-1 flex justify-around shrink-0 sticky bottom-0 z-40">
+    <nav className="md:hidden bg-card border-t border-border px-1 py-1 flex justify-around shrink-0 fixed bottom-0 left-0 right-0 z-40">
       {navItems.map((item) => (
         <Link
           key={item.href}
