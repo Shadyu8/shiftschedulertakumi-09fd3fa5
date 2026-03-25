@@ -19,7 +19,7 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
       <main
         className={`flex-1 transition-all duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-16"}`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-8 pb-16 md:pb-8">
           {children}
         </div>
       </main>
