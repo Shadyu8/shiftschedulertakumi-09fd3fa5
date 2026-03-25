@@ -56,7 +56,7 @@ const roleNavItems: Record<string, NavItem[]> = {
 /* ─── Mobile Header ─── */
 function MobileHeader({ profilePic }: { profilePic?: string | null }) {
   return (
-    <header className="md:hidden bg-card border-b border-border px-4 h-12 flex items-center justify-between shrink-0">
+    <header className="md:hidden bg-card border-b border-border px-4 h-12 flex items-center justify-between shrink-0 sticky top-0 z-40">
       <Link to="/" className="flex items-center gap-2">
         <img src="/icon.png" alt="Logo" className="w-5 h-5 object-contain" />
         <span className="font-bold text-foreground text-sm">Spike's Planner</span>
@@ -77,7 +77,7 @@ function MobileHeader({ profilePic }: { profilePic?: string | null }) {
 /* ─── Mobile Bottom Nav ─── */
 function MobileBottomNav({ navItems, isActive }: { navItems: NavItem[]; isActive: (href: string) => boolean }) {
   return (
-    <nav className="md:hidden bg-card border-t border-border px-1 py-1 flex justify-around shrink-0">
+    <nav className="md:hidden bg-card border-t border-border px-1 py-1 flex justify-around shrink-0 sticky bottom-0 z-40">
       {navItems.map((item) => (
         <Link
           key={item.href}
