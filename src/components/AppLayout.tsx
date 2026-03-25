@@ -13,13 +13,13 @@ function AppLayoutInner({ children }: { children: ReactNode }) {
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + "/");
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'hsl(var(--background))' }}>
+    <div className="h-[100dvh] flex flex-col overflow-hidden" style={{ backgroundColor: 'hsl(var(--background))' }}>
       <AppNavigation />
 
       <main
-        className={`flex-1 transition-all duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-16"}`}
+        className={`flex-1 overflow-y-auto transition-all duration-200 ${sidebarOpen ? "md:ml-64" : "md:ml-16"}`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-8 pb-16 md:pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-8 pb-20 md:pb-8">
           {children}
         </div>
       </main>
