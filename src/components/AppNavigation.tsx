@@ -53,13 +53,10 @@ const roleNavItems: Record<string, NavItem[]> = {
   kiosk: [],
 };
 
-/* ─── Mobile Header (non-fixed, lives in flex flow) ─── */
+/* ─── Mobile Header ─── */
 function MobileHeader({ profilePic }: { profilePic?: string | null }) {
   return (
-    <header
-      className="md:hidden bg-card border-b border-border px-4 flex items-center justify-between shrink-0"
-      style={{ paddingTop: 'env(safe-area-inset-top)', minHeight: 'calc(3rem + env(safe-area-inset-top))' }}
-    >
+    <header className="md:hidden bg-card border-b border-border px-4 h-12 flex items-center justify-between shrink-0">
       <Link to="/" className="flex items-center gap-2">
         <img src="/icon.png" alt="Logo" className="w-5 h-5 object-contain" />
         <span className="font-bold text-foreground text-sm">Spike's Planner</span>
@@ -77,17 +74,10 @@ function MobileHeader({ profilePic }: { profilePic?: string | null }) {
   );
 }
 
-/* ─── Mobile Bottom Nav (non-fixed, lives in flex flow) ─── */
+/* ─── Mobile Bottom Nav ─── */
 function MobileBottomNav({ navItems, isActive }: { navItems: NavItem[]; isActive: (href: string) => boolean }) {
   return (
-    <nav
-      className="md:hidden bg-card border-t border-border px-1 pt-1 flex justify-around shrink-0"
-      style={{
-        paddingBottom: 'calc(0.25rem + env(safe-area-inset-bottom))',
-        WebkitUserSelect: 'none',
-        touchAction: 'manipulation',
-      }}
-    >
+    <nav className="md:hidden bg-card border-t border-border px-1 py-1 flex justify-around shrink-0">
       {navItems.map((item) => (
         <Link
           key={item.href}
@@ -95,7 +85,6 @@ function MobileBottomNav({ navItems, isActive }: { navItems: NavItem[]; isActive
           className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 shrink-0 ${
             isActive(item.href) ? "text-primary" : "text-muted-foreground"
           }`}
-          style={{ touchAction: 'manipulation' }}
         >
           {item.icon}
           <span className="truncate max-w-[48px]">{item.mobileLabel || item.label}</span>
@@ -204,7 +193,6 @@ export default function AppNavigation() {
 
   return (
     <>
-      {/* Mobile: header + bottom nav rendered as flex children (NOT fixed) */}
       <MobileHeader profilePic={profilePic} />
       <DesktopSidebar
         navItems={navItems}
@@ -220,5 +208,4 @@ export default function AppNavigation() {
   );
 }
 
-/* Export for AppLayout to render bottom nav separately */
 export { MobileBottomNav, roleNavItems };
