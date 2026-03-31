@@ -251,8 +251,7 @@ export default function ManagerSchedule() {
           supabase.from("profiles").select("user_id, full_name, staff_type").in("user_id", userIds),
           supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
         ]);
-        console.log("[ScheduleBuilder] profiles:", profilesRes.data, "error:", profilesRes.error);
-        console.log("[ScheduleBuilder] roles:", rolesRes.data, "error:", rolesRes.error);
+        
         const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.user_id, { full_name: p.full_name, staff_type: p.staff_type }]));
         const roleMap = new Map((rolesRes.data || []).map((r: any) => [r.user_id, r.role]));
         const filtered: Worker[] = userIds
