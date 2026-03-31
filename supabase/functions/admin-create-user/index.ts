@@ -91,6 +91,20 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // Tenant isolation: managers can only delete users in their own org
+      if (callerRole.role !== "admin") {
+        const { data: targetProfile } = await adminClient
+          .from("profiles")
+          .select("organization_id")
+          .eq("user_id", body.user_id)
+          .single();
+        if (!targetProfile || targetProfile.organization_id !== callerOrgId) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
       const { error } = await adminClient.auth.admin.deleteUser(body.user_id);
       if (error) {
         console.error("Delete user error:", error);
