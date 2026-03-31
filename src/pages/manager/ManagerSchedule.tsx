@@ -242,17 +242,16 @@ export default function ManagerSchedule() {
       .select("user_id")
       .eq("location_id", locationId)
       .then(async ({ data: ulData, error: ulError }) => {
-        console.log("[ScheduleBuilder] user_locations query:", { ulData, ulError, locationId });
+        
         if (!ulData || ulData.length === 0) { setWorkers([]); return; }
         const userIds = [...new Set(ulData.map((d: any) => d.user_id))];
-        console.log("[ScheduleBuilder] userIds from location:", userIds);
+        
         // Fetch profiles and roles in parallel
         const [profilesRes, rolesRes] = await Promise.all([
           supabase.from("profiles").select("user_id, full_name, staff_type").in("user_id", userIds),
           supabase.from("user_roles").select("user_id, role").in("user_id", userIds),
         ]);
-        console.log("[ScheduleBuilder] profiles:", profilesRes.data, "error:", profilesRes.error);
-        console.log("[ScheduleBuilder] roles:", rolesRes.data, "error:", rolesRes.error);
+        
         const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.user_id, { full_name: p.full_name, staff_type: p.staff_type }]));
         const roleMap = new Map((rolesRes.data || []).map((r: any) => [r.user_id, r.role]));
         const filtered: Worker[] = userIds
@@ -266,7 +265,7 @@ export default function ManagerSchedule() {
             role: roleMap.get(uid),
             staff_type: profileMap.get(uid)?.staff_type ?? "floor",
           }));
-        console.log("[ScheduleBuilder] filtered workers:", filtered);
+        
         setWorkers(filtered);
       });
   }, [locationId, profile]);

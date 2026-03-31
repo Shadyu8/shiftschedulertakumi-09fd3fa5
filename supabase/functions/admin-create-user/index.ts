@@ -67,6 +67,14 @@ serve(async (req) => {
       });
     }
 
+    // Fetch caller's organization for tenant isolation
+    const { data: callerProfile } = await adminClient
+      .from("profiles")
+      .select("organization_id")
+      .eq("user_id", caller.id)
+      .single();
+    const callerOrgId = callerProfile?.organization_id;
+
     const body = await req.json();
 
     // Delete user action
@@ -82,6 +90,20 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      // Tenant isolation: managers can only delete users in their own org
+      if (callerRole.role !== "admin") {
+        const { data: targetProfile } = await adminClient
+          .from("profiles")
+          .select("organization_id")
+          .eq("user_id", body.user_id)
+          .single();
+        if (!targetProfile || targetProfile.organization_id !== callerOrgId) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
       const { error } = await adminClient.auth.admin.deleteUser(body.user_id);
       if (error) {
@@ -103,6 +125,20 @@ serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      // Tenant isolation: managers can only update users in their own org
+      if (callerRole.role !== "admin") {
+        const { data: targetProfile } = await adminClient
+          .from("profiles")
+          .select("organization_id")
+          .eq("user_id", body.user_id)
+          .single();
+        if (!targetProfile || targetProfile.organization_id !== callerOrgId) {
+          return new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       const profileUpdates: Record<string, any> = {};
@@ -206,8 +242,10 @@ serve(async (req) => {
     }
 
     // Create user
-    const { full_name, password, role, organization_id, phone } = body;
+    const { full_name, password, role, phone } = body;
     const username = body.username || body.email;
+    // Tenant isolation: managers must create users in their own org
+    const organization_id = callerRole.role === "admin" ? (body.organization_id || callerOrgId) : callerOrgId;
 
     if (!full_name || !password || !role || !username) {
       return new Response(JSON.stringify({ error: "Missing required fields (full_name, username or email, password, role)" }), {
