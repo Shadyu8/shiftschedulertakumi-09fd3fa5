@@ -245,7 +245,7 @@ export default function ManagerSchedule() {
         
         if (!ulData || ulData.length === 0) { setWorkers([]); return; }
         const userIds = [...new Set(ulData.map((d: any) => d.user_id))];
-        console.log("[ScheduleBuilder] userIds from location:", userIds);
+        
         // Fetch profiles and roles in parallel
         const [profilesRes, rolesRes] = await Promise.all([
           supabase.from("profiles").select("user_id, full_name, staff_type").in("user_id", userIds),
