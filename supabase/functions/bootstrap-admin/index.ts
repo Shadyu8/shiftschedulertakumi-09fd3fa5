@@ -77,6 +77,22 @@ serve(async (req) => {
       );
     }
 
+    // Update the role from default 'worker' to 'admin'
+    if (newUser.user) {
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .update({ role: "admin" })
+        .eq("user_id", newUser.user.id);
+
+      if (roleError) {
+        console.error("Role update error:", roleError);
+        return new Response(
+          JSON.stringify({ error: "User created but failed to assign admin role" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, user_id: newUser.user?.id, message: "Admin user created. You can now log in." }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
