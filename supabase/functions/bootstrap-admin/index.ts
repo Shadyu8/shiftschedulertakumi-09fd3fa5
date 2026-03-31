@@ -32,21 +32,26 @@ serve(async (req) => {
       );
     }
 
-    const { email, password, full_name } = await req.json();
+    const { username, password, full_name, email: providedEmail } = await req.json();
 
-    if (!email || !password) {
+    if (!username || !password) {
       return new Response(
-        JSON.stringify({ error: "Email and password are required" }),
+        JSON.stringify({ error: "Username and password are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (typeof email !== "string" || !EMAIL_REGEX.test(email) || email.length > 255) {
+    if (typeof username !== "string" || username.trim().length < 3 || username.length > 100) {
       return new Response(
-        JSON.stringify({ error: "Invalid email format" }),
+        JSON.stringify({ error: "Username must be 3-100 characters" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Use provided email or generate placeholder from username
+    const email = (typeof providedEmail === "string" && EMAIL_REGEX.test(providedEmail))
+      ? providedEmail
+      : `${username.trim().toLowerCase().replace(/[^a-z0-9]/g, "")}@internal.noemail`;
 
     if (typeof password !== "string" || password.length < 8 || password.length > 128) {
       return new Response(
@@ -63,7 +68,7 @@ serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: {
-        username: email,
+        username: username.trim(),
         full_name: safeName,
         role: "admin",
       },
