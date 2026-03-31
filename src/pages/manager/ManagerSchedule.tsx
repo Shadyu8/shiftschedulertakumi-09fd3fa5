@@ -242,7 +242,7 @@ export default function ManagerSchedule() {
       .select("user_id")
       .eq("location_id", locationId)
       .then(async ({ data: ulData, error: ulError }) => {
-        console.log("[ScheduleBuilder] user_locations query:", { ulData, ulError, locationId });
+        
         if (!ulData || ulData.length === 0) { setWorkers([]); return; }
         const userIds = [...new Set(ulData.map((d: any) => d.user_id))];
         console.log("[ScheduleBuilder] userIds from location:", userIds);
