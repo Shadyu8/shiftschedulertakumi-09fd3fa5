@@ -68,7 +68,7 @@ serve(async (req) => {
       password,
       email_confirm: true,
       user_metadata: {
-        username: email,
+        username: username.trim(),
         full_name: safeName,
         role: "admin",
       },
