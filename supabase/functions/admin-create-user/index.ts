@@ -242,8 +242,10 @@ serve(async (req) => {
     }
 
     // Create user
-    const { full_name, password, role, organization_id, phone } = body;
+    const { full_name, password, role, phone } = body;
     const username = body.username || body.email;
+    // Tenant isolation: managers must create users in their own org
+    const organization_id = callerRole.role === "admin" ? (body.organization_id || callerOrgId) : callerOrgId;
 
     if (!full_name || !password || !role || !username) {
       return new Response(JSON.stringify({ error: "Missing required fields (full_name, username or email, password, role)" }), {
