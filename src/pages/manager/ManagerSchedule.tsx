@@ -265,7 +265,7 @@ export default function ManagerSchedule() {
             role: roleMap.get(uid),
             staff_type: profileMap.get(uid)?.staff_type ?? "floor",
           }));
-        console.log("[ScheduleBuilder] filtered workers:", filtered);
+        
         setWorkers(filtered);
       });
   }, [locationId, profile]);
