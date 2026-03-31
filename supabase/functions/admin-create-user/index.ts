@@ -67,6 +67,14 @@ serve(async (req) => {
       });
     }
 
+    // Fetch caller's organization for tenant isolation
+    const { data: callerProfile } = await adminClient
+      .from("profiles")
+      .select("organization_id")
+      .eq("user_id", caller.id)
+      .single();
+    const callerOrgId = callerProfile?.organization_id;
+
     const body = await req.json();
 
     // Delete user action
