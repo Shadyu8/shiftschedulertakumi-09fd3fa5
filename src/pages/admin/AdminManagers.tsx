@@ -47,6 +47,39 @@ export default function AdminManagers() {
   const [editLocations, setEditLocations] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
+  async function invokeAdminCreateUser(body: Record<string, unknown>) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error("Your session expired. Please sign in again.");
+    }
+
+    const res = await supabase.functions.invoke("admin-create-user", {
+      body,
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (res.error) {
+      const errorWithContext = res.error as { message?: string; context?: Response };
+      let message = errorWithContext.message || "Edge Function returned a non-2xx status code";
+      if (errorWithContext.context) {
+        try {
+          const payload = await errorWithContext.context.json();
+          if (payload?.error && typeof payload.error === "string") {
+            message = payload.error;
+          }
+        } catch {
+          // Keep default error message when response isn't valid JSON
+        }
+      }
+      throw new Error(message);
+    }
+
+    if (res.data?.error) throw new Error(res.data.error);
+    return res.data;
+  }
+
   async function fetchData() {
     const [mgrsRes, orgsRes, locsRes] = await Promise.all([
       supabase.from("user_roles").select("id, user_id, role").eq("role", "manager"),
@@ -84,11 +117,14 @@ export default function AdminManagers() {
     if (!email.trim() || !fullName.trim() || !password || !orgId) return;
     setCreating(true);
     try {
-      const res = await supabase.functions.invoke("admin-create-user", {
-        body: { email, full_name: fullName, password, role: "manager", organization_id: orgId, location_ids: selectedLocations },
+      await invokeAdminCreateUser({
+        email,
+        full_name: fullName,
+        password,
+        role: "manager",
+        organization_id: orgId,
+        location_ids: selectedLocations,
       });
-      if (res.error) throw res.error;
-      if (res.data?.error) throw new Error(res.data.error);
       toast.success("Manager created");
       setEmail(""); setFullName(""); setPassword(""); setSelectedLocations([]);
       fetchData();
@@ -117,9 +153,7 @@ export default function AdminManagers() {
         location_ids: editLocations,
       };
       if (editPassword.trim()) body.password = editPassword;
-      const res = await supabase.functions.invoke("admin-create-user", { body });
-      if (res.error) throw res.error;
-      if (res.data?.error) throw new Error(res.data.error);
+      await invokeAdminCreateUser(body);
       toast.success("Manager updated");
       setEditManager(null);
       fetchData();
@@ -132,12 +166,13 @@ export default function AdminManagers() {
 
   async function handleDelete(userId: string) {
     if (!confirm("Delete this manager?")) return;
-    const res = await supabase.functions.invoke("admin-create-user", {
-      body: { action: "delete", user_id: userId },
-    });
-    if (res.error) { toast.error("Failed to delete"); return; }
-    toast.success("Deleted");
-    fetchData();
+    try {
+      await invokeAdminCreateUser({ action: "delete", user_id: userId });
+      toast.success("Deleted");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete");
+    }
   }
 
   const editManagerOrgId = editManager?.profiles?.organization_id;
