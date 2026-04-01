@@ -110,12 +110,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (body.user_id === caller.id) {
-        return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       if (body.user_id === callerId) {
         return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
           status: 400,
@@ -138,7 +132,7 @@ serve(async (req) => {
       }
       // Clean up related rows before deleting auth user to avoid FK constraint errors
       const cleanupErrors: string[] = [];
-      const runCleanup = async (label: string, operation: Promise<{ error: any }>) => {
+      const runCleanup = async (label: string, operation: any) => {
         const { error } = await operation;
         if (error) {
           cleanupErrors.push(`${label}: ${error.message}`);
