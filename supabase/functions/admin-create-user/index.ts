@@ -340,13 +340,16 @@ serve(async (req) => {
         .eq("user_id", newUser.user.id);
     }
 
-    // For kiosk accounts
-    if (role === "kiosk" && body.location_id && newUser.user) {
+    // Update role from default 'worker' to the requested role
+    if (newUser.user && role !== "worker") {
       await adminClient
         .from("user_roles")
-        .update({ role: "kiosk" })
+        .update({ role })
         .eq("user_id", newUser.user.id);
-      
+    }
+
+    // For kiosk accounts, also create the kiosk_accounts record
+    if (role === "kiosk" && body.location_id && newUser.user) {
       await adminClient.from("kiosk_accounts").insert({
         user_id: newUser.user.id,
         location_id: body.location_id,
