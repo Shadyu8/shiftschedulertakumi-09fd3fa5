@@ -128,10 +128,25 @@ serve(async (req) => {
           });
         }
       }
+      // Clean up related rows before deleting auth user to avoid FK constraint errors
+      try {
+        await adminClient.from("user_locations").delete().eq("user_id", body.user_id);
+        await adminClient.from("user_roles").delete().eq("user_id", body.user_id);
+        await adminClient.from("kiosk_accounts").delete().eq("user_id", body.user_id);
+        await adminClient.from("availability").delete().eq("user_id", body.user_id);
+        await adminClient.from("availability_exceptions").delete().eq("user_id", body.user_id);
+        await adminClient.from("availability_templates").delete().eq("user_id", body.user_id);
+        await adminClient.from("fulltimer_schedules").delete().eq("user_id", body.user_id);
+        await adminClient.from("fulltimer_schedule_overrides").delete().eq("user_id", body.user_id);
+        await adminClient.from("profiles").delete().eq("user_id", body.user_id);
+      } catch (cleanupErr: any) {
+        console.error("Cleanup error before delete:", cleanupErr);
+      }
+
       const { error } = await adminClient.auth.admin.deleteUser(body.user_id);
       if (error) {
         console.error("Delete user error:", error);
-        return new Response(JSON.stringify({ error: "Failed to delete user" }), {
+        return new Response(JSON.stringify({ error: "Failed to delete user", detail: error.message }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
