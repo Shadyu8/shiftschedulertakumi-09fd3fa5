@@ -54,7 +54,7 @@ serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -63,22 +63,24 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
+      global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
-    if (authError || !caller) {
-      console.error("Auth error:", authError, "Caller:", caller);
-      return new Response(JSON.stringify({ error: "Invalid token", detail: authError?.message }), {
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    const callerId = claimsData?.claims?.sub;
+
+    if (claimsError || !callerId || !UUID_REGEX.test(callerId)) {
+      console.error("Auth claims error:", claimsError, "Claims:", claimsData);
+      return new Response(JSON.stringify({ error: "Unauthorized", detail: claimsError?.message ?? "Invalid bearer token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log("Caller ID:", caller.id);
+    console.log("Caller ID:", callerId);
 
     const { data: callerRole, error: roleError } = await adminClient
       .from("user_roles")
       .select("role")
-      .eq("user_id", caller.id)
+      .eq("user_id", callerId)
       .single();
 
     console.log("Caller role query result:", callerRole, "Error:", roleError);
@@ -94,7 +96,7 @@ serve(async (req) => {
     const { data: callerProfile } = await adminClient
       .from("profiles")
       .select("organization_id")
-      .eq("user_id", caller.id)
+      .eq("user_id", callerId)
       .single();
     const callerOrgId = callerProfile?.organization_id;
 
@@ -109,6 +111,12 @@ serve(async (req) => {
         });
       }
       if (body.user_id === caller.id) {
+        return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (body.user_id === callerId) {
         return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -402,7 +410,7 @@ serve(async (req) => {
       await adminClient.from("kiosk_accounts").insert({
         user_id: newUser.user.id,
         location_id: body.location_id,
-        created_by: caller.id,
+          created_by: callerId,
       });
     }
 
