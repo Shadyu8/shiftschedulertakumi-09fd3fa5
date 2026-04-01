@@ -129,24 +129,34 @@ serve(async (req) => {
         }
       }
       // Clean up related rows before deleting auth user to avoid FK constraint errors
-      try {
-        await adminClient.from("user_locations").delete().eq("user_id", body.user_id);
-        await adminClient.from("user_roles").delete().eq("user_id", body.user_id);
-        await adminClient.from("kiosk_accounts").delete().eq("user_id", body.user_id);
-        await adminClient.from("availability").delete().eq("user_id", body.user_id);
-        await adminClient.from("availability_exceptions").delete().eq("user_id", body.user_id);
-        await adminClient.from("availability_templates").delete().eq("user_id", body.user_id);
-        await adminClient.from("fulltimer_schedules").delete().eq("user_id", body.user_id);
-        await adminClient.from("fulltimer_schedule_overrides").delete().eq("user_id", body.user_id);
-        await adminClient.from("profiles").delete().eq("user_id", body.user_id);
-      } catch (cleanupErr: any) {
-        console.error("Cleanup error before delete:", cleanupErr);
-      }
+      const cleanupErrors: string[] = [];
+      const runCleanup = async (label: string, operation: Promise<{ error: any }>) => {
+        const { error } = await operation;
+        if (error) {
+          cleanupErrors.push(`${label}: ${error.message}`);
+          console.error(`Cleanup step failed (${label}):`, error);
+        }
+      };
+
+      await runCleanup("time_punches.approved_by", adminClient.from("time_punches").update({ approved_by: null }).eq("approved_by", body.user_id));
+      await runCleanup("time_punches.recorded_in_by_id", adminClient.from("time_punches").update({ recorded_in_by_id: null }).eq("recorded_in_by_id", body.user_id));
+      await runCleanup("time_punches.recorded_out_by_id", adminClient.from("time_punches").update({ recorded_out_by_id: null }).eq("recorded_out_by_id", body.user_id));
+      await runCleanup("shifts", adminClient.from("shifts").delete().eq("user_id", body.user_id));
+      await runCleanup("time_punches", adminClient.from("time_punches").delete().eq("user_id", body.user_id));
+      await runCleanup("user_locations", adminClient.from("user_locations").delete().eq("user_id", body.user_id));
+      await runCleanup("user_roles", adminClient.from("user_roles").delete().eq("user_id", body.user_id));
+      await runCleanup("kiosk_accounts", adminClient.from("kiosk_accounts").delete().eq("user_id", body.user_id));
+      await runCleanup("availability", adminClient.from("availability").delete().eq("user_id", body.user_id));
+      await runCleanup("availability_exceptions", adminClient.from("availability_exceptions").delete().eq("user_id", body.user_id));
+      await runCleanup("availability_templates", adminClient.from("availability_templates").delete().eq("user_id", body.user_id));
+      await runCleanup("fulltimer_schedules", adminClient.from("fulltimer_schedules").delete().eq("user_id", body.user_id));
+      await runCleanup("fulltimer_schedule_overrides", adminClient.from("fulltimer_schedule_overrides").delete().eq("user_id", body.user_id));
+      await runCleanup("profiles", adminClient.from("profiles").delete().eq("user_id", body.user_id));
 
       const { error } = await adminClient.auth.admin.deleteUser(body.user_id);
       if (error) {
-        console.error("Delete user error:", error);
-        return new Response(JSON.stringify({ error: "Failed to delete user", detail: error.message }), {
+        console.error("Delete user error:", error, "Cleanup errors:", cleanupErrors);
+        return new Response(JSON.stringify({ error: "Failed to delete user", detail: error.message, cleanupErrors }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
