@@ -22,6 +22,25 @@ function getRandomPfp(): string {
   return DEFAULT_PFPS[Math.floor(Math.random() * DEFAULT_PFPS.length)];
 }
 
+async function replaceUserRole(adminClient: any, userId: string, role: string) {
+  const { error: deleteError } = await adminClient
+    .from("user_roles")
+    .delete()
+    .eq("user_id", userId);
+
+  if (deleteError) {
+    throw new Error(`Failed to clear existing roles: ${deleteError.message}`);
+  }
+
+  const { error: insertError } = await adminClient
+    .from("user_roles")
+    .insert({ user_id: userId, role });
+
+  if (insertError) {
+    throw new Error(`Failed to assign role: ${insertError.message}`);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -198,11 +217,9 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const { error: roleError } = await adminClient
-          .from("user_roles")
-          .update({ role: body.role })
-          .eq("user_id", body.user_id);
-        if (roleError) {
+        try {
+          await replaceUserRole(adminClient, body.user_id, body.role);
+        } catch (roleError: any) {
           console.error("Update role error:", roleError);
           return new Response(JSON.stringify({ error: "Failed to update role" }), {
             status: 500,
@@ -340,12 +357,19 @@ serve(async (req) => {
         .eq("user_id", newUser.user.id);
     }
 
-    // Update role from default 'worker' to the requested role
-    if (newUser.user && role !== "worker") {
-      await adminClient
-        .from("user_roles")
-        .update({ role })
-        .eq("user_id", newUser.user.id);
+    // Force exactly one role row so the user never stays on the default worker role
+    if (newUser.user) {
+      try {
+        await replaceUserRole(adminClient, newUser.user.id, role);
+      } catch (roleError: any) {
+        console.error("Create user role sync error:", roleError);
+        await adminClient.auth.admin.deleteUser(newUser.user.id);
+
+        return new Response(JSON.stringify({ error: "Failed to assign requested role" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // For kiosk accounts, also create the kiosk_accounts record
