@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const VALID_ROLES = ["admin", "manager", "shiftleader", "worker", "kiosk", "fulltimer"];
+const ROLE_PRIORITY = ["admin", "manager", "shiftleader", "fulltimer", "kiosk", "worker"] as const;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,6 +21,55 @@ const DEFAULT_PFPS = [
 
 function getRandomPfp(): string {
   return DEFAULT_PFPS[Math.floor(Math.random() * DEFAULT_PFPS.length)];
+}
+
+async function resolveAuthenticatedUserId(userClient: any, token: string) {
+  const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+  const claimUserId = claimsData?.claims?.sub;
+
+  if (!claimsError && typeof claimUserId === "string" && UUID_REGEX.test(claimUserId)) {
+    return { userId: claimUserId, detail: null };
+  }
+
+  const { data: userData, error: userError } = await userClient.auth.getUser(token);
+  const userId = userData?.user?.id;
+
+  if (!userError && typeof userId === "string" && UUID_REGEX.test(userId)) {
+    return { userId, detail: null };
+  }
+
+  console.error("Auth resolution failed", {
+    claimsError: claimsError?.message,
+    claimUserId,
+    userError: userError?.message,
+    userId,
+  });
+
+  return {
+    userId: null,
+    detail: claimsError?.message ?? userError?.message ?? "Invalid bearer token",
+  };
+}
+
+async function getEffectiveUserRole(adminClient: any, userId: string) {
+  const { data, error } = await adminClient
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to fetch user role: ${error.message}`);
+  }
+
+  const roles = (data ?? [])
+    .map((entry: { role: string | null }) => entry.role)
+    .filter((role: string | null): role is string => typeof role === "string");
+
+  for (const role of ROLE_PRIORITY) {
+    if (roles.includes(role)) return role;
+  }
+
+  return roles[0] ?? null;
 }
 
 async function replaceUserRole(adminClient: any, userId: string, role: string) {
@@ -47,9 +97,13 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey || !publishableKey) {
+      throw new Error("Missing required Supabase environment variables");
+    }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
@@ -62,31 +116,25 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const userClient = createClient(supabaseUrl, anonKey, {
+    const userClient = createClient(supabaseUrl, publishableKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    const callerId = claimsData?.claims?.sub;
+    const { userId: callerId, detail: authDetail } = await resolveAuthenticatedUserId(userClient, token);
 
-    if (claimsError || !callerId || !UUID_REGEX.test(callerId)) {
-      console.error("Auth claims error:", claimsError, "Claims:", claimsData);
-      return new Response(JSON.stringify({ error: "Unauthorized", detail: claimsError?.message ?? "Invalid bearer token" }), {
+    if (!callerId) {
+      return new Response(JSON.stringify({ error: "Unauthorized", detail: authDetail }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     console.log("Caller ID:", callerId);
 
-    const { data: callerRole, error: roleError } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", callerId)
-      .single();
+    const callerRole = await getEffectiveUserRole(adminClient, callerId);
 
-    console.log("Caller role query result:", callerRole, "Error:", roleError);
+    console.log("Caller effective role:", callerRole);
 
-    if (!callerRole || !["admin", "manager"].includes(callerRole.role)) {
-      return new Response(JSON.stringify({ error: "Forbidden", debug: { callerRole, roleError: roleError?.message } }), {
+    if (!callerRole || !["admin", "manager"].includes(callerRole)) {
+      return new Response(JSON.stringify({ error: "Forbidden", debug: { callerRole } }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -117,7 +165,7 @@ serve(async (req) => {
         });
       }
       // Tenant isolation: managers can only delete users in their own org
-      if (callerRole.role !== "admin") {
+      if (callerRole !== "admin") {
         const { data: targetProfile } = await adminClient
           .from("profiles")
           .select("organization_id")
@@ -177,7 +225,7 @@ serve(async (req) => {
         });
       }
       // Tenant isolation: managers can only update users in their own org
-      if (callerRole.role !== "admin") {
+      if (callerRole !== "admin") {
         const { data: targetProfile } = await adminClient
           .from("profiles")
           .select("organization_id")
@@ -232,13 +280,13 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (body.role === "manager" && callerRole.role !== "admin") {
+        if (body.role === "manager" && callerRole !== "admin") {
           return new Response(JSON.stringify({ error: "Only admins can promote to manager" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        if (body.role === "admin" && callerRole.role !== "admin") {
+        if (body.role === "admin" && callerRole !== "admin") {
           return new Response(JSON.stringify({ error: "Only admins can promote to admin" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -293,7 +341,7 @@ serve(async (req) => {
     const { full_name, password, role, phone } = body;
     const username = body.username || body.email;
     // Tenant isolation: managers must create users in their own org
-    const organization_id = callerRole.role === "admin" ? (body.organization_id || callerOrgId) : callerOrgId;
+    const organization_id = callerRole === "admin" ? (body.organization_id || callerOrgId) : callerOrgId;
 
     if (!full_name || !password || !role || !username) {
       return new Response(JSON.stringify({ error: "Missing required fields (full_name, username or email, password, role)" }), {
@@ -337,7 +385,7 @@ serve(async (req) => {
       });
     }
 
-    if (role === "manager" && callerRole.role !== "admin") {
+    if (role === "manager" && callerRole !== "admin") {
       return new Response(JSON.stringify({ error: "Only admins can create managers" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
