@@ -48,20 +48,24 @@ serve(async (req) => {
     });
     const { data: { user: caller }, error: authError } = await userClient.auth.getUser();
     if (authError || !caller) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+      console.error("Auth error:", authError, "Caller:", caller);
+      return new Response(JSON.stringify({ error: "Invalid token", detail: authError?.message }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    console.log("Caller ID:", caller.id);
 
-    const { data: callerRole } = await adminClient
+    const { data: callerRole, error: roleError } = await adminClient
       .from("user_roles")
       .select("role")
       .eq("user_id", caller.id)
       .single();
 
+    console.log("Caller role query result:", callerRole, "Error:", roleError);
+
     if (!callerRole || !["admin", "manager"].includes(callerRole.role)) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
+      return new Response(JSON.stringify({ error: "Forbidden", debug: { callerRole, roleError: roleError?.message } }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
